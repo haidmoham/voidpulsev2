@@ -19,6 +19,17 @@ npm run dev
 
 Use `npm run build` for a production build.
 
+## Listen to real music
+
+Voidpulse can analyze audio from a surface you explicitly share through the browser's native picker.
+
+1. Play music in the Spotify Web Player in a separate browser tab.
+2. Select **bind music source** in Voidpulse.
+3. Choose the Spotify tab and enable **Share audio**.
+4. Use **release source** or the browser's sharing control to stop.
+
+Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Voidpulse does not record, replay, or upload it. When capture ends, the scene returns to its synthetic signal.
+
 ## Spotify OAuth
 
 Voidpulse uses Spotify Authorization Code with PKCE. It requires a client ID but no client secret.
