@@ -1,8 +1,8 @@
-# Voidpulse v2
+# Faltone
 
 > The song is a space, and playback is descent through it.
 
-Voidpulse is a Three.js experiment in falling through the temporal structure of a song. Locomotion is the primary visualization channel: audio features become control signals, control signals drive fall dynamics, and fall dynamics shape the rendered world.
+Faltone is a Three.js experiment in falling through the temporal structure of a song. Locomotion is the primary visualization channel: audio features become control signals, control signals drive fall dynamics, and fall dynamics shape the rendered world.
 
 The current prototype has an endless falling corridor and can switch between a synthetic music frame and live, local analysis of a shared browser tab.
 
@@ -21,20 +21,20 @@ Use `npm run build` for a production build.
 
 ## Listen to real music
 
-Voidpulse can analyze audio from a surface you explicitly share through the browser's native picker.
+Faltone can analyze audio from a surface you explicitly share through the browser's native picker.
 
 1. Play music in the Spotify Web Player in a separate browser tab.
-2. Select **bind music source** in Voidpulse.
+2. Select **bind music source** in Faltone.
 3. Choose the Spotify tab and enable **Share audio**.
 4. Use **release source** or the browser's sharing control to stop.
 
-Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Voidpulse does not record, replay, spatialize, or upload it. When capture ends, the scene returns to its synthetic signal.
+Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Faltone does not record, replay, spatialize, or upload it. When capture ends, the scene returns to its synthetic signal.
 
 The analyser currently derives intensity, transient energy, low/mid/high energy, stereo balance, and stereo width. These features drive the visual soundstage while the listener continues hearing Spotify normally.
 
 ## Spotify OAuth
 
-Voidpulse uses Spotify Authorization Code with PKCE. It requires a client ID but no client secret.
+Faltone uses Spotify Authorization Code with PKCE. It requires a client ID but no client secret.
 
 1. Create or reuse an app in the Spotify developer dashboard.
 2. Add `http://127.0.0.1:5173/callback` as a redirect URI for local development.

@@ -21,7 +21,7 @@ export interface FrameScheduler {
   cancel(handle: number): void;
 }
 
-export interface VoidpulseControllerOptions {
+export interface FaltoneControllerOptions {
   signal: MusicSignal;
   renderer: WorldRenderer;
   onMusicFrame?: (music: MusicFrame) => void;
@@ -34,7 +34,7 @@ const BROWSER_FRAME_SCHEDULER: FrameScheduler = {
 };
 
 /** Owns time and simulation state while delegating input and rendering. */
-export class VoidpulseController {
+export class FaltoneController {
   private readonly signal: MusicSignal;
   private readonly renderer: WorldRenderer;
   private readonly onMusicFrame: ((music: MusicFrame) => void) | undefined;
@@ -44,7 +44,7 @@ export class VoidpulseController {
   private previousTime: number | null = null;
   private frameHandle: number | null = null;
 
-  constructor(options: VoidpulseControllerOptions) {
+  constructor(options: FaltoneControllerOptions) {
     this.signal = options.signal;
     this.renderer = options.renderer;
     this.onMusicFrame = options.onMusicFrame;

@@ -1,9 +1,12 @@
 const AUTHORIZE_URL = "https://accounts.spotify.com/authorize";
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const SCOPES = ["user-read-playback-state"];
-const TOKEN_STORAGE_KEY = "voidpulse.spotify.tokens";
-const VERIFIER_STORAGE_KEY = "voidpulse.spotify.verifier";
-const STATE_STORAGE_KEY = "voidpulse.spotify.state";
+const TOKEN_STORAGE_KEY = "faltone.spotify.tokens";
+const VERIFIER_STORAGE_KEY = "faltone.spotify.verifier";
+const STATE_STORAGE_KEY = "faltone.spotify.state";
+const LEGACY_TOKEN_STORAGE_KEY = "voidpulse.spotify.tokens";
+const LEGACY_VERIFIER_STORAGE_KEY = "voidpulse.spotify.verifier";
+const LEGACY_STATE_STORAGE_KEY = "voidpulse.spotify.state";
 
 interface SpotifyTokenResponse {
   access_token: string;
@@ -80,10 +83,14 @@ export class SpotifyAuth {
       throw new Error(`Spotify authorization failed: ${error}`);
     }
 
-    const verifier = sessionStorage.getItem(VERIFIER_STORAGE_KEY);
-    const expectedState = sessionStorage.getItem(STATE_STORAGE_KEY);
+    const verifier = sessionStorage.getItem(VERIFIER_STORAGE_KEY)
+      ?? sessionStorage.getItem(LEGACY_VERIFIER_STORAGE_KEY);
+    const expectedState = sessionStorage.getItem(STATE_STORAGE_KEY)
+      ?? sessionStorage.getItem(LEGACY_STATE_STORAGE_KEY);
     sessionStorage.removeItem(VERIFIER_STORAGE_KEY);
     sessionStorage.removeItem(STATE_STORAGE_KEY);
+    sessionStorage.removeItem(LEGACY_VERIFIER_STORAGE_KEY);
+    sessionStorage.removeItem(LEGACY_STATE_STORAGE_KEY);
 
     if (!verifier || !returnedState || returnedState !== expectedState) {
       this.cleanCallbackUrl();
@@ -143,6 +150,7 @@ export class SpotifyAuth {
 
   disconnect(): void {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
   }
 
   private storeTokens(response: SpotifyTokenResponse, fallbackRefreshToken = ""): void {
@@ -155,7 +163,8 @@ export class SpotifyAuth {
   }
 
   private readTokens(): StoredTokens | null {
-    const serialized = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const serialized = localStorage.getItem(TOKEN_STORAGE_KEY)
+      ?? localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY);
     if (!serialized) return null;
     try {
       const parsed: unknown = JSON.parse(serialized);
@@ -174,11 +183,16 @@ export class SpotifyAuth {
         this.disconnect();
         return null;
       }
-      return {
+      const tokens = {
         accessToken: String(candidate.accessToken),
         expiresAt: Number(candidate.expiresAt),
         refreshToken: String(candidate.refreshToken),
       };
+      if (!localStorage.getItem(TOKEN_STORAGE_KEY)) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+      }
+      localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+      return tokens;
     } catch {
       this.disconnect();
       return null;

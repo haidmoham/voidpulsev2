@@ -1,7 +1,7 @@
 import "./style.css";
 import { DemoMusicSignal, DisplayAudioSignal, SignalRouter } from "./audio";
 import { SourceDock } from "./presentation";
-import { VoidpulseController } from "./runtime";
+import { FaltoneController } from "./runtime";
 import { SpotifyAuth } from "./spotify/SpotifyAuth";
 import { FallWorld } from "./world";
 
@@ -52,7 +52,7 @@ const unsubscribeDisplaySignal = displaySignal.subscribe((source) => {
   sourceDock.renderCaptureStatus(source.status, source.label);
 });
 
-const controller = new VoidpulseController({
+const controller = new FaltoneController({
   signal: signalRouter,
   renderer: world,
   onMusicFrame: (music) => {

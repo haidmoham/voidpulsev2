@@ -1,6 +1,6 @@
 export {
   type FrameScheduler,
-  VoidpulseController,
-  type VoidpulseControllerOptions,
+  FaltoneController,
+  type FaltoneControllerOptions,
   type WorldRenderer,
-} from "./VoidpulseController";
+} from "./FaltoneController";
