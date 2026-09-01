@@ -21,3 +21,27 @@ canvas {
   display: block;
   touch-action: none;
 }
+
+.spotify-auth {
+  position: fixed;
+  z-index: 2;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  padding: 0.65rem 0.9rem;
+  color: rgb(255 255 255 / 78%);
+  background: rgb(3 3 10 / 70%);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.spotify-auth[data-status="connected"] {
+  border-color: rgb(29 185 84 / 55%);
+  color: #b9f6cf;
+}
+
+.spotify-auth:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
