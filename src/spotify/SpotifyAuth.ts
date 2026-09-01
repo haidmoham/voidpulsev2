@@ -18,6 +18,19 @@ interface StoredTokens {
   refreshToken: string;
 }
 
+interface StoredTokenCandidate {
+  accessToken?: unknown;
+  expiresAt?: unknown;
+  refreshToken?: unknown;
+}
+
+interface SpotifyTokenCandidate {
+  access_token?: unknown;
+  expires_in?: unknown;
+  refresh_token?: unknown;
+  token_type?: unknown;
+}
+
 export type SpotifyAuthStatus = "unconfigured" | "disconnected" | "connecting" | "connected";
 
 export class SpotifyAuth {
@@ -145,7 +158,27 @@ export class SpotifyAuth {
     const serialized = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!serialized) return null;
     try {
-      return JSON.parse(serialized) as StoredTokens;
+      const parsed: unknown = JSON.parse(serialized);
+      if (Object.prototype.toString.call(parsed) !== "[object Object]") {
+        this.disconnect();
+        return null;
+      }
+      // SAFETY: the record check above establishes the boundary object; every field is decoded below.
+      const candidate = parsed as StoredTokenCandidate;
+      if (
+        Object.prototype.toString.call(candidate.accessToken) !== "[object String]"
+        || Object.prototype.toString.call(candidate.expiresAt) !== "[object Number]"
+        || !Number.isFinite(Number(candidate.expiresAt))
+        || Object.prototype.toString.call(candidate.refreshToken) !== "[object String]"
+      ) {
+        this.disconnect();
+        return null;
+      }
+      return {
+        accessToken: String(candidate.accessToken),
+        expiresAt: Number(candidate.expiresAt),
+        refreshToken: String(candidate.refreshToken),
+      };
     } catch {
       this.disconnect();
       return null;
@@ -158,7 +191,32 @@ export class SpotifyAuth {
 }
 
 async function parseTokenResponse(response: Response): Promise<SpotifyTokenResponse> {
-  return response.json() as Promise<SpotifyTokenResponse>;
+  const parsed: unknown = await response.json();
+  if (Object.prototype.toString.call(parsed) !== "[object Object]") {
+    throw new Error("Spotify returned an invalid token payload");
+  }
+  // SAFETY: the record check above establishes the boundary object; every field is decoded below.
+  const candidate = parsed as SpotifyTokenCandidate;
+  if (
+    Object.prototype.toString.call(candidate.access_token) !== "[object String]"
+    || Object.prototype.toString.call(candidate.expires_in) !== "[object Number]"
+    || !Number.isFinite(Number(candidate.expires_in))
+    || Object.prototype.toString.call(candidate.token_type) !== "[object String]"
+    || (
+      candidate.refresh_token !== undefined
+      && Object.prototype.toString.call(candidate.refresh_token) !== "[object String]"
+    )
+  ) {
+    throw new Error("Spotify returned an invalid token payload");
+  }
+  return {
+    access_token: String(candidate.access_token),
+    expires_in: Number(candidate.expires_in),
+    refresh_token: candidate.refresh_token === undefined
+      ? undefined
+      : String(candidate.refresh_token),
+    token_type: String(candidate.token_type),
+  };
 }
 
 function randomUrlSafeString(length: number): string {
