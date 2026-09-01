@@ -1,0 +1,16 @@
+export const WORLD_VISUAL_PALETTE = {
+  landmark: 0xb9b6ff,
+  current: 0x899aab,
+  dust: 0x88a28e,
+  gravityOuter: 0xc06a59,
+  gravityInner: 0xd1a15d,
+  gravityCore: 0x090609,
+  gravityRing: 0xf2e5d4,
+  gravityFunnel: 0xc06a59,
+  aperture: 0xb486a1,
+  cool: 0x899aab,
+  warm: 0xc06a59,
+  wake: 0xf2e5d4,
+  void: 0x160f18,
+  weather: 0x352333,
+} as const;
