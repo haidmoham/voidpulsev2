@@ -1,8 +1,9 @@
 import "./style.css";
-import { DemoIntensitySignal } from "./audio/IntensitySignal";
-import { FallDynamics } from "./dynamics/FallDynamics";
-import { SpotifyAuth, type SpotifyAuthStatus } from "./spotify/SpotifyAuth";
-import { FallWorld } from "./world/FallWorld";
+import { DemoMusicSignal, DisplayAudioSignal, SignalRouter } from "./audio";
+import { SourceDock } from "./presentation";
+import { FaltoneController } from "./runtime";
+import { SpotifyAuth } from "./spotify/SpotifyAuth";
+import { FallWorld } from "./world";
 
 const container = document.querySelector<HTMLElement>("#app");
 
@@ -10,54 +11,77 @@ if (!container) {
   throw new Error("Missing #app container");
 }
 
-const signal = new DemoIntensitySignal();
-const dynamics = new FallDynamics();
-const world = new FallWorld(container);
+const displaySignal = new DisplayAudioSignal();
+const signalRouter = new SignalRouter(new DemoMusicSignal());
 const spotify = new SpotifyAuth();
-let previousTime = performance.now();
+const world = new FallWorld(container);
 
-const spotifyButton = document.createElement("button");
-spotifyButton.className = "spotify-auth";
-spotifyButton.type = "button";
-container.append(spotifyButton);
-
-function renderSpotifyStatus(status: SpotifyAuthStatus, message = ""): void {
-  spotifyButton.dataset.status = status;
-  spotifyButton.disabled = status === "connecting" || status === "unconfigured";
-  spotifyButton.textContent = message || ({
-    unconfigured: "spotify not configured",
-    disconnected: "connect spotify",
-    connecting: "connecting…",
-    connected: "spotify connected",
-  } satisfies Record<SpotifyAuthStatus, string>)[status];
-}
-
-spotifyButton.addEventListener("click", () => {
-  if (spotify.status() === "connected") {
-    spotify.disconnect();
-    renderSpotifyStatus("disconnected");
+function handleCaptureAction(): void {
+  if (displaySignal.status === "active") {
+    displaySignal.stop();
     return;
   }
-  renderSpotifyStatus("connecting");
-  void spotify.connect().catch((error: Error) => renderSpotifyStatus("disconnected", error.message));
-});
 
-renderSpotifyStatus(spotify.status());
-void spotify.handleCallback()
-  .then((handled) => {
-    if (handled) renderSpotifyStatus("connected");
-  })
-  .catch((error: Error) => renderSpotifyStatus("disconnected", error.message));
-
-function frame(now: number): void {
-  const deltaSeconds = Math.min((now - previousTime) / 1000, 0.1);
-  const timeSeconds = now / 1000;
-  previousTime = now;
-
-  const state = dynamics.update(signal.sample(timeSeconds), deltaSeconds);
-  world.render(state, timeSeconds);
-  requestAnimationFrame(frame);
+  void displaySignal.start().catch(() => {
+    // DisplayAudioSignal owns the user-facing error state.
+  });
 }
 
-window.addEventListener("resize", () => world.resize());
-requestAnimationFrame(frame);
+function handleSpotifyAction(): void {
+  if (spotify.status() === "connected") {
+    spotify.disconnect();
+    sourceDock.renderSpotifyStatus("disconnected");
+    return;
+  }
+
+  sourceDock.renderSpotifyStatus("connecting");
+  void spotify.connect().catch((error: Error) => {
+    sourceDock.renderSpotifyStatus("disconnected", error.message);
+  });
+}
+
+const sourceDock = new SourceDock({
+  container,
+  onCaptureAction: handleCaptureAction,
+  onSpotifyAction: handleSpotifyAction,
+});
+
+const unsubscribeDisplaySignal = displaySignal.subscribe((source) => {
+  if (source.status === "active") signalRouter.select(source);
+  else signalRouter.reset();
+  sourceDock.renderCaptureStatus(source.status, source.label);
+});
+
+const controller = new FaltoneController({
+  signal: signalRouter,
+  renderer: world,
+  onMusicFrame: (music) => {
+    sourceDock.renderSignalLevel(music.intensity, displaySignal.status === "active");
+  },
+});
+
+sourceDock.renderCaptureStatus(displaySignal.status, displaySignal.label);
+sourceDock.renderSpotifyStatus(spotify.status());
+void spotify.handleCallback()
+  .then((handled) => {
+    if (handled) sourceDock.renderSpotifyStatus("connected");
+  })
+  .catch((error: Error) => {
+    sourceDock.renderSpotifyStatus("disconnected", error.message);
+  });
+
+function resize(): void {
+  controller.resize();
+}
+
+function dispose(): void {
+  window.removeEventListener("resize", resize);
+  unsubscribeDisplaySignal();
+  displaySignal.stop();
+  sourceDock.dispose();
+  controller.dispose();
+}
+
+window.addEventListener("resize", resize);
+window.addEventListener("beforeunload", dispose, { once: true });
+controller.start();

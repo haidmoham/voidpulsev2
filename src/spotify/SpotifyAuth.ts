@@ -1,9 +1,12 @@
 const AUTHORIZE_URL = "https://accounts.spotify.com/authorize";
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const SCOPES = ["user-read-playback-state"];
-const TOKEN_STORAGE_KEY = "voidpulse.spotify.tokens";
-const VERIFIER_STORAGE_KEY = "voidpulse.spotify.verifier";
-const STATE_STORAGE_KEY = "voidpulse.spotify.state";
+const TOKEN_STORAGE_KEY = "faltone.spotify.tokens";
+const VERIFIER_STORAGE_KEY = "faltone.spotify.verifier";
+const STATE_STORAGE_KEY = "faltone.spotify.state";
+const LEGACY_TOKEN_STORAGE_KEY = "voidpulse.spotify.tokens";
+const LEGACY_VERIFIER_STORAGE_KEY = "voidpulse.spotify.verifier";
+const LEGACY_STATE_STORAGE_KEY = "voidpulse.spotify.state";
 
 interface SpotifyTokenResponse {
   access_token: string;
@@ -16,6 +19,19 @@ interface StoredTokens {
   accessToken: string;
   expiresAt: number;
   refreshToken: string;
+}
+
+interface StoredTokenCandidate {
+  accessToken?: unknown;
+  expiresAt?: unknown;
+  refreshToken?: unknown;
+}
+
+interface SpotifyTokenCandidate {
+  access_token?: unknown;
+  expires_in?: unknown;
+  refresh_token?: unknown;
+  token_type?: unknown;
 }
 
 export type SpotifyAuthStatus = "unconfigured" | "disconnected" | "connecting" | "connected";
@@ -67,10 +83,14 @@ export class SpotifyAuth {
       throw new Error(`Spotify authorization failed: ${error}`);
     }
 
-    const verifier = sessionStorage.getItem(VERIFIER_STORAGE_KEY);
-    const expectedState = sessionStorage.getItem(STATE_STORAGE_KEY);
+    const verifier = sessionStorage.getItem(VERIFIER_STORAGE_KEY)
+      ?? sessionStorage.getItem(LEGACY_VERIFIER_STORAGE_KEY);
+    const expectedState = sessionStorage.getItem(STATE_STORAGE_KEY)
+      ?? sessionStorage.getItem(LEGACY_STATE_STORAGE_KEY);
     sessionStorage.removeItem(VERIFIER_STORAGE_KEY);
     sessionStorage.removeItem(STATE_STORAGE_KEY);
+    sessionStorage.removeItem(LEGACY_VERIFIER_STORAGE_KEY);
+    sessionStorage.removeItem(LEGACY_STATE_STORAGE_KEY);
 
     if (!verifier || !returnedState || returnedState !== expectedState) {
       this.cleanCallbackUrl();
@@ -130,6 +150,7 @@ export class SpotifyAuth {
 
   disconnect(): void {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
   }
 
   private storeTokens(response: SpotifyTokenResponse, fallbackRefreshToken = ""): void {
@@ -142,10 +163,36 @@ export class SpotifyAuth {
   }
 
   private readTokens(): StoredTokens | null {
-    const serialized = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const serialized = localStorage.getItem(TOKEN_STORAGE_KEY)
+      ?? localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY);
     if (!serialized) return null;
     try {
-      return JSON.parse(serialized) as StoredTokens;
+      const parsed: unknown = JSON.parse(serialized);
+      if (Object.prototype.toString.call(parsed) !== "[object Object]") {
+        this.disconnect();
+        return null;
+      }
+      // SAFETY: the record check above establishes the boundary object; every field is decoded below.
+      const candidate = parsed as StoredTokenCandidate;
+      if (
+        Object.prototype.toString.call(candidate.accessToken) !== "[object String]"
+        || Object.prototype.toString.call(candidate.expiresAt) !== "[object Number]"
+        || !Number.isFinite(Number(candidate.expiresAt))
+        || Object.prototype.toString.call(candidate.refreshToken) !== "[object String]"
+      ) {
+        this.disconnect();
+        return null;
+      }
+      const tokens = {
+        accessToken: String(candidate.accessToken),
+        expiresAt: Number(candidate.expiresAt),
+        refreshToken: String(candidate.refreshToken),
+      };
+      if (!localStorage.getItem(TOKEN_STORAGE_KEY)) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+      }
+      localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+      return tokens;
     } catch {
       this.disconnect();
       return null;
@@ -158,7 +205,32 @@ export class SpotifyAuth {
 }
 
 async function parseTokenResponse(response: Response): Promise<SpotifyTokenResponse> {
-  return response.json() as Promise<SpotifyTokenResponse>;
+  const parsed: unknown = await response.json();
+  if (Object.prototype.toString.call(parsed) !== "[object Object]") {
+    throw new Error("Spotify returned an invalid token payload");
+  }
+  // SAFETY: the record check above establishes the boundary object; every field is decoded below.
+  const candidate = parsed as SpotifyTokenCandidate;
+  if (
+    Object.prototype.toString.call(candidate.access_token) !== "[object String]"
+    || Object.prototype.toString.call(candidate.expires_in) !== "[object Number]"
+    || !Number.isFinite(Number(candidate.expires_in))
+    || Object.prototype.toString.call(candidate.token_type) !== "[object String]"
+    || (
+      candidate.refresh_token !== undefined
+      && Object.prototype.toString.call(candidate.refresh_token) !== "[object String]"
+    )
+  ) {
+    throw new Error("Spotify returned an invalid token payload");
+  }
+  return {
+    access_token: String(candidate.access_token),
+    expires_in: Number(candidate.expires_in),
+    refresh_token: candidate.refresh_token === undefined
+      ? undefined
+      : String(candidate.refresh_token),
+    token_type: String(candidate.token_type),
+  };
 }
 
 function randomUrlSafeString(length: number): string {
