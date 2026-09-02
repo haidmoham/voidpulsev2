@@ -19,10 +19,12 @@ export class SignalRouter implements MusicSignal {
   }
 
   select(signal: MusicSignal): void {
+    if (this.activeSignal !== signal) this.activeSignal?.reset?.();
     this.activeSignal = signal;
   }
 
   reset(): void {
+    this.activeSignal?.reset?.();
     this.activeSignal = null;
   }
 

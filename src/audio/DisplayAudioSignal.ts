@@ -1,5 +1,10 @@
 import type { MusicFrame } from "../core";
 import type { MusicSignal } from "./MusicSignal";
+import {
+  DISPLAY_ANALYZER_DEFAULTS,
+  MusicAnalyzer,
+  SILENT_MUSIC_FRAME,
+} from "./musicAnalyzer";
 
 export type DisplayAudioState = "idle" | "starting" | "active" | "stopped" | "error";
 
@@ -30,7 +35,7 @@ export class DisplayAudioSignal implements MusicSignal {
   private leftSamples: Float32Array<ArrayBuffer> | null = null;
   private rightSamples: Float32Array<ArrayBuffer> | null = null;
   private hasStereo = false;
-  private value = 0;
+  private musicAnalyzer: MusicAnalyzer | null = null;
   private lastSampleTime: number | null = null;
   private requestId = 0;
   private listeners = new Set<(signal: DisplayAudioSignal) => void>();
@@ -90,16 +95,16 @@ export class DisplayAudioSignal implements MusicSignal {
     try {
       // The video constraint exists only to open the browser's display picker.
       stream.getVideoTracks().forEach((track) => track.stop());
-      const context = new AudioContext();
+      const context = new AudioContext({ latencyHint: DISPLAY_ANALYZER_DEFAULTS.latencyHint });
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
       const splitter = context.createChannelSplitter(2);
       const leftAnalyser = context.createAnalyser();
       const rightAnalyser = context.createAnalyser();
-      analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0;
-      leftAnalyser.fftSize = 1024;
-      rightAnalyser.fftSize = 1024;
+      analyser.fftSize = DISPLAY_ANALYZER_DEFAULTS.fftSize;
+      analyser.smoothingTimeConstant = DISPLAY_ANALYZER_DEFAULTS.smoothingTimeConstant;
+      leftAnalyser.fftSize = DISPLAY_ANALYZER_DEFAULTS.stereoFftSize;
+      rightAnalyser.fftSize = DISPLAY_ANALYZER_DEFAULTS.stereoFftSize;
       source.connect(analyser);
       source.connect(splitter);
       splitter.connect(leftAnalyser, 0);
@@ -117,7 +122,7 @@ export class DisplayAudioSignal implements MusicSignal {
       this.leftSamples = new Float32Array(leftAnalyser.fftSize);
       this.rightSamples = new Float32Array(rightAnalyser.fftSize);
       this.hasStereo = (audioTracks[0]?.getSettings().channelCount ?? source.channelCount) > 1;
-      this.value = 0;
+      this.musicAnalyzer = new MusicAnalyzer();
       this.lastSampleTime = null;
       stream.getTracks().forEach((track) => track.addEventListener("ended", () => {
         if (this.stream === stream) this.stop();
@@ -144,45 +149,30 @@ export class DisplayAudioSignal implements MusicSignal {
       || !spectrumSamples
       || !leftSamples
       || !rightSamples
+      || !this.musicAnalyzer
       || !this.leftAnalyser
       || !this.rightAnalyser
       || this.status !== "active"
     ) {
-      return silentMusicFrame();
+      return SILENT_MUSIC_FRAME;
     }
 
     analyser.getFloatTimeDomainData(timeSamples);
     analyser.getByteFrequencyData(spectrumSamples);
     this.leftAnalyser.getFloatTimeDomainData(leftSamples);
     this.rightAnalyser.getFloatTimeDomainData(rightSamples);
-    const rms = rootMeanSquare(timeSamples);
-
-    const noiseFloor = 0.012;
-    const gained = Math.max(0, rms - noiseFloor) * 5;
-    const target = gained / (0.2 + gained); // soft compression: musical, not jumpy
-    const transient = Math.max(0, target - this.value);
-    const elapsed = this.lastSampleTime === null ? 1 / 60 : Math.max(0, timeSeconds - this.lastSampleTime);
-    const timeConstant = target > this.value ? 0.045 : 0.25;
-    const blend = 1 - Math.exp(-elapsed / timeConstant);
-    this.value += (target - this.value) * blend;
+    const elapsed = this.lastSampleTime === null ? 1 / 60 : timeSeconds - this.lastSampleTime;
     this.lastSampleTime = timeSeconds;
-
-    const intensity = clampUnit(this.value);
-    const leftLevel = rootMeanSquare(leftSamples);
-    const rightLevel = rootMeanSquare(rightSamples);
-    const balanceDenominator = leftLevel + rightLevel;
-
-    return {
-      intensity,
-      transient: clampUnit(transient * 2.5),
-      low: frequencyBandEnergy(spectrumSamples, 30, 250, analyser.context.sampleRate, analyser.fftSize),
-      mid: frequencyBandEnergy(spectrumSamples, 250, 2_500, analyser.context.sampleRate, analyser.fftSize),
-      high: frequencyBandEnergy(spectrumSamples, 2_500, 12_000, analyser.context.sampleRate, analyser.fftSize),
-      balance: this.hasStereo && balanceDenominator > 0.0001
-        ? Math.max(-1, Math.min(1, (rightLevel - leftLevel) / balanceDenominator))
-        : 0,
-      width: this.hasStereo ? stereoWidth(leftSamples, rightSamples) : 0,
-    };
+    return this.musicAnalyzer.sampleBuffers(
+      spectrumSamples,
+      timeSamples,
+      leftSamples,
+      rightSamples,
+      analyser.context.sampleRate,
+      analyser.fftSize,
+      elapsed,
+      this.hasStereo,
+    );
   }
 
   stop(): void {
@@ -192,6 +182,11 @@ export class DisplayAudioSignal implements MusicSignal {
     if (wasCapturing || this.status === "starting") {
       this.setState("stopped", "Display-audio capture stopped.");
     }
+  }
+
+  reset(): void {
+    this.musicAnalyzer?.reset();
+    this.lastSampleTime = null;
   }
 
   private release(): void {
@@ -213,7 +208,8 @@ export class DisplayAudioSignal implements MusicSignal {
     this.leftSamples = null;
     this.rightSamples = null;
     this.hasStereo = false;
-    this.value = 0;
+    this.musicAnalyzer?.reset();
+    this.musicAnalyzer = null;
     this.lastSampleTime = null;
     source?.disconnect();
     splitter?.disconnect();
@@ -230,70 +226,4 @@ export class DisplayAudioSignal implements MusicSignal {
     this.label = label;
     this.listeners.forEach((listener) => listener(this));
   }
-}
-
-function silentMusicFrame(): MusicFrame {
-  return {
-    intensity: 0,
-    transient: 0,
-    low: 0,
-    mid: 0,
-    high: 0,
-    balance: 0,
-    width: 0,
-  };
-}
-
-function rootMeanSquare(samples: Float32Array<ArrayBuffer>): number {
-  let sumSquares = 0;
-  for (const sample of samples) sumSquares += sample * sample;
-  return Math.sqrt(sumSquares / samples.length);
-}
-
-function frequencyBandEnergy(
-  spectrum: Uint8Array<ArrayBuffer>,
-  startFrequency: number,
-  endFrequency: number,
-  sampleRate: number,
-  fftSize: number,
-): number {
-  const frequencyPerBin = sampleRate / fftSize;
-  const firstBin = Math.max(0, Math.floor(startFrequency / frequencyPerBin));
-  const lastBin = Math.min(spectrum.length - 1, Math.ceil(endFrequency / frequencyPerBin));
-  let total = 0;
-  let count = 0;
-
-  for (let index = firstBin; index <= lastBin; index += 1) {
-    total += spectrum[index] ?? 0;
-    count += 1;
-  }
-
-  return count === 0 ? 0 : clampUnit(total / count / 255 * 2.4);
-}
-
-function stereoWidth(
-  left: Float32Array<ArrayBuffer>,
-  right: Float32Array<ArrayBuffer>,
-): number {
-  let sideEnergy = 0;
-  let midEnergy = 0;
-  const sampleCount = Math.min(left.length, right.length);
-
-  for (let index = 0; index < sampleCount; index += 1) {
-    const leftSample = left[index] ?? 0;
-    const rightSample = right[index] ?? 0;
-    const side = (leftSample - rightSample) * 0.5;
-    const mid = (leftSample + rightSample) * 0.5;
-    sideEnergy += side * side;
-    midEnergy += mid * mid;
-  }
-
-  const sideLevel = Math.sqrt(sideEnergy / sampleCount);
-  const midLevel = Math.sqrt(midEnergy / sampleCount);
-  const total = sideLevel + midLevel;
-  return total < 0.0001 ? 0 : clampUnit(sideLevel / total);
-}
-
-function clampUnit(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }

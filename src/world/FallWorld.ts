@@ -15,6 +15,8 @@ interface LandmarkSeed {
   readonly z: number;
   readonly scale: number;
   readonly phase: number;
+  /** Keeps the large, structural anchors quieter than the low-mass field. */
+  readonly wakeWeight: number;
 }
 
 interface Aperture {
@@ -26,7 +28,7 @@ interface Aperture {
 }
 
 export class FallWorld {
-  private readonly camera = new THREE.PerspectiveCamera(72, 1, 0.1, 220);
+  private readonly camera = new THREE.PerspectiveCamera(68, 1, 0.1, 220);
   private readonly scene = new THREE.Scene();
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   private readonly landmarkMaterial = new THREE.MeshBasicMaterial({
@@ -48,6 +50,22 @@ export class FallWorld {
   });
   private readonly currentLine = new THREE.Line(createCurrentGeometry(), this.currentMaterial);
   private readonly currentLineReplica = new THREE.Line(
+    this.currentLine.geometry,
+    this.currentMaterial,
+  );
+  private readonly currentInnerLine = new THREE.Line(
+    this.currentLine.geometry,
+    this.currentMaterial,
+  );
+  private readonly currentInnerLineReplica = new THREE.Line(
+    this.currentLine.geometry,
+    this.currentMaterial,
+  );
+  private readonly currentOuterLine = new THREE.Line(
+    this.currentLine.geometry,
+    this.currentMaterial,
+  );
+  private readonly currentOuterLineReplica = new THREE.Line(
     this.currentLine.geometry,
     this.currentMaterial,
   );
@@ -131,6 +149,18 @@ export class FallWorld {
     this.gravityFunnel.rotation.x = Math.PI;
     this.gravityFunnel.position.y = 21;
     this.currentLineReplica.position.y = -FALL_LOOP_DEPTH;
+    this.currentInnerLine.position.set(-0.65, 0, 0.35);
+    this.currentInnerLine.rotation.z = -0.32;
+    this.currentInnerLine.scale.set(0.72, 1, 0.72);
+    this.currentInnerLineReplica.position.set(-0.65, -FALL_LOOP_DEPTH, 0.35);
+    this.currentInnerLineReplica.rotation.z = -0.32;
+    this.currentInnerLineReplica.scale.set(0.72, 1, 0.72);
+    this.currentOuterLine.position.set(0.85, 0, -0.55);
+    this.currentOuterLine.rotation.z = 0.24;
+    this.currentOuterLine.scale.set(1.34, 1, 1.34);
+    this.currentOuterLineReplica.position.set(0.85, -FALL_LOOP_DEPTH, -0.55);
+    this.currentOuterLineReplica.rotation.z = 0.24;
+    this.currentOuterLineReplica.scale.set(1.34, 1, 1.34);
     this.dustReplica.position.y = -FALL_LOOP_DEPTH;
     this.gravityWell.add(
       this.gravityFunnel,
@@ -145,6 +175,10 @@ export class FallWorld {
       this.dustReplica,
       this.currentLine,
       this.currentLineReplica,
+      this.currentInnerLine,
+      this.currentInnerLineReplica,
+      this.currentOuterLine,
+      this.currentOuterLineReplica,
       this.landmarks,
     );
 
@@ -180,16 +214,22 @@ export class FallWorld {
     }
 
     for (let index = 0; index < LANDMARK_COUNT; index += 1) {
-      const radius = 2 + Math.random() * 20;
+      const structuralAnchor = index < 24;
+      const radius = structuralAnchor
+        ? 7 + Math.random() * 15
+        : 2 + Math.random() * 20;
       const angle = Math.random() * Math.PI * 2;
       const depth = Math.random() * FALL_LOOP_DEPTH;
-      const scale = 0.5 + Math.random() * 3;
+      const scale = structuralAnchor
+        ? 3.8 + Math.random() * 3.2
+        : 0.5 + Math.random() * 3;
       const seed = {
         x: Math.cos(angle) * radius,
         depth,
         z: Math.sin(angle) * radius,
         scale,
         phase: Math.random() * Math.PI * 2,
+        wakeWeight: structuralAnchor ? 0.12 : 0.34,
       };
       this.landmarkSeeds.push(seed);
       this.matrix.makeScale(scale, scale, scale);
@@ -214,8 +254,20 @@ export class FallWorld {
   }
 
   render(frame: WorldFrame): void {
-    const { fall: state, music, reactivity, timeSeconds } = frame;
-    const { breath, cameraDepth, paletteDrift, wakeEnergy, weather } = reactivity;
+    const { reactivity, timeSeconds } = frame;
+    const {
+      breath,
+      cameraDepth,
+      currentPresence,
+      dustPresence,
+      gravityWeight,
+      lateralPull,
+      paletteDrift,
+      soundstageScale,
+      wakeEnergy,
+      wakeRingOpacity,
+      weather,
+    } = reactivity;
 
     this.backgroundColor.lerpColors(this.voidColor, this.weatherColor, 0.28 + weather * 0.5);
     const fog = this.scene.fog;
@@ -225,17 +277,22 @@ export class FallWorld {
     }
     this.dust.rotation.y = timeSeconds * 0.007;
     this.dustReplica.rotation.y = this.dust.rotation.y;
-    const soundstageScale = 1 + music.width * 0.12;
     this.dust.scale.set(soundstageScale, 1, soundstageScale);
     this.dustReplica.scale.copy(this.dust.scale);
-    this.dustMaterial.opacity = 0.2 + weather * 0.11 + state.intensity * 0.04
-      + music.high * 0.045;
+    this.dustMaterial.opacity = 0.2 + weather * 0.11 + dustPresence;
     this.currentLine.rotation.y = timeSeconds * 0.009;
     this.currentLineReplica.rotation.y = this.currentLine.rotation.y;
+    this.currentInnerLine.rotation.y = timeSeconds * 0.011 + 1.9;
+    this.currentInnerLineReplica.rotation.y = this.currentInnerLine.rotation.y;
+    this.currentOuterLine.rotation.y = timeSeconds * 0.007 - 1.25;
+    this.currentOuterLineReplica.rotation.y = this.currentOuterLine.rotation.y;
     this.currentLine.scale.set(soundstageScale, 1, soundstageScale);
     this.currentLineReplica.scale.copy(this.currentLine.scale);
-    this.currentMaterial.opacity = 0.12 + weather * 0.1 + state.intensity * 0.08
-      + music.mid * 0.04;
+    this.currentInnerLine.scale.set(0.72 * soundstageScale, 1, 0.72 * soundstageScale);
+    this.currentInnerLineReplica.scale.copy(this.currentInnerLine.scale);
+    this.currentOuterLine.scale.set(1.34 * soundstageScale, 1, 1.34 * soundstageScale);
+    this.currentOuterLineReplica.scale.copy(this.currentOuterLine.scale);
+    this.currentMaterial.opacity = 0.052 + weather * 0.035 + currentPresence;
     this.currentMaterial.color.lerpColors(this.coolColor, this.warmColor, paletteDrift * 0.42);
 
     for (const aperture of this.apertures) {
@@ -264,7 +321,7 @@ export class FallWorld {
       const wakeDistance = (relativeDepth - 18) / 9;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
       const peripheralBreath = Math.sin(timeSeconds * 0.18 + seed.phase) * 0.018 * weather;
-      const scale = seed.scale * (1 + peripheralBreath + localWake * 0.3);
+      const scale = seed.scale * (1 + peripheralBreath + localWake * seed.wakeWeight);
 
       this.matrix.makeScale(scale, scale, scale);
       this.matrix.setPosition(seed.x, -cameraDepth - relativeDepth, seed.z);
@@ -279,21 +336,19 @@ export class FallWorld {
     if (this.landmarks.instanceColor) this.landmarks.instanceColor.needsUpdate = true;
 
     const currentPhase = timeSeconds * 0.038;
-    const currentStrength = 0.55 + state.intensity * 0.45;
+    const currentStrength = 0.55;
     this.camera.position.y = -cameraDepth;
     this.camera.position.x = Math.sin(currentPhase) * currentStrength
       + Math.sin(timeSeconds * 0.11) * 0.1
-      + music.balance * (0.35 + music.width * 0.25);
+      + lateralPull;
     this.camera.position.z = Math.cos(currentPhase * 0.73 + 0.8) * currentStrength;
-    this.camera.fov = 68 + state.intensity * 18;
-    this.camera.updateProjectionMatrix();
 
     this.gravityWell.position.set(0, -cameraDepth - 78, 0);
-    this.gravityWell.scale.setScalar(0.94 + state.intensity * 0.1 + music.low * 0.055);
-    this.gravityOuterMaterial.opacity = 0.3 + weather * 0.14 + state.intensity * 0.08;
-    this.gravityInnerMaterial.opacity = 0.62 + state.intensity * 0.18;
-    this.gravityRingMaterial.opacity = 0.32 + state.intensity * 0.2 + music.transient * 0.1;
-    this.gravityFunnelMaterial.opacity = 0.022 + weather * 0.02 + state.intensity * 0.018;
+    this.gravityWell.scale.setScalar(0.94 + gravityWeight);
+    this.gravityOuterMaterial.opacity = 0.3 + weather * 0.14;
+    this.gravityInnerMaterial.opacity = 0.62;
+    this.gravityRingMaterial.opacity = 0.32 + wakeRingOpacity;
+    this.gravityFunnelMaterial.opacity = 0.022 + weather * 0.02;
     this.renderer.render(this.scene, this.camera);
   }
 

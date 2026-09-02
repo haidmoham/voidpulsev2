@@ -77,17 +77,17 @@ export class FaltoneController {
       ? 1 / 60
       : Math.min(0.1, Math.max(0, timeSeconds - this.previousTime));
     const music = this.signal.sample(timeSeconds);
-    const fall = advanceFall(this.fallState, music.intensity, deltaSeconds);
+    const fall = advanceFall(this.fallState, music, deltaSeconds);
     const step = advanceReactivity(
       this.reactivityState,
       fall,
+      music,
       timeSeconds,
       deltaSeconds,
     );
     const frame: WorldFrame = {
       timeSeconds,
       deltaSeconds,
-      music,
       fall,
       reactivity: step.reactivity,
     };

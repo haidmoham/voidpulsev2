@@ -9,6 +9,10 @@ export interface FallState {
 export interface MusicFrame {
   readonly intensity: number;
   readonly transient: number;
+  /** A single threshold-crossing event; false on all recovery frames. */
+  readonly onset: boolean;
+  /** Stable onset-interval estimate in beats per minute, or zero until established. */
+  readonly estimatedBpm: number;
   readonly low: number;
   readonly mid: number;
   readonly high: number;
@@ -20,6 +24,8 @@ export interface MusicFrame {
 export interface ReactivityState {
   readonly previousIntensity: number;
   readonly wakeEnergy: number;
+  /** Remaining recovery time so one onset cannot repeatedly fire a wake. */
+  readonly onsetCooldown?: number;
 }
 
 /** Deterministic world values derived for one rendered frame. */
@@ -31,6 +37,18 @@ export interface ReactivityFrame {
   readonly weather: number;
   readonly breath: number;
   readonly paletteDrift: number;
+  /** Stereo width opens the field, without altering its topology. */
+  readonly soundstageScale: number;
+  /** High-frequency material presence, capped for a non-flashing atmosphere. */
+  readonly dustPresence: number;
+  /** Mid-frequency current presence, kept separate from camera motion. */
+  readonly currentPresence: number;
+  /** Low-frequency gravity/body weight. */
+  readonly gravityWeight: number;
+  /** Stereo balance mapped to a restrained horizontal pull. */
+  readonly lateralPull: number;
+  /** The bounded visual remainder of a discrete onset. */
+  readonly wakeRingOpacity: number;
 }
 
 /** The next persistent reactivity state and its derived frame values. */
@@ -43,7 +61,6 @@ export interface ReactivityStep {
 export interface WorldFrame {
   readonly timeSeconds: number;
   readonly deltaSeconds: number;
-  readonly music: MusicFrame;
   readonly fall: FallState;
   readonly reactivity: ReactivityFrame;
 }
