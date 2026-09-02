@@ -98,7 +98,17 @@ npm run build
 
 The suite contains deterministic analyzer coverage for both 44.1 and 48 kHz bands, historical releases, onset/recovery/BPM, stereo and mono behavior, and router reset isolation; it also covers fixed-sequence model determinism, zero-music baseline, 180-unit wrapping with cumulative distance, and semantic output caps.
 
-Real-track capture QA remains manual because the native display picker requires a user gesture and user-selected surface. It has not been claimed as automated audio-capture proof. Before shipping, use a quiet ambient piece, bass-forward material, mid-forward vocals, bright percussion, hard pans, wide/narrow mixes, and a strong transition to confirm the bounded behaviors described above.
+### Real-track QA, 2026-09-02
+
+The acceptance pass split the two browser responsibilities deliberately. The production bind control reached the native capture-permission boundary in the VS Code integrated preview; canceling it shared no source and returned the dock to its explicit `capture needs attention` state. A temporary, unlinked local QA page then fed open-licensed audio through the production `MusicAnalyzer -> FaltoneController -> FallWorld` path so the visual response could be inspected without granting access to an unknown screen or personal audio source. The page and audio were not shipped.
+
+- [Moonlight Sonata](https://commons.wikimedia.org/wiki/File:Moonlight_Sonata.ogg) provided quiet, narrow material: no tempo lock, the calm `72 BPM` fallback held descent at `6.00 units/s`, and width stayed within `0.000..0.085`.
+- [Chill Beat](https://commons.wikimedia.org/wiki/File:Chill_Beat.ogg) covered bass/mids and a wider mix: tempo settled at `69 BPM`, descent at `5.77 units/s`, balance at `-0.303..0.167`, and width at `0.000..0.490`; gravity/current motion stayed legible without turning the camera noisy.
+- [Techno@120BPM](https://commons.wikimedia.org/wiki/File:Techno@120BPM.ogg) verified tempo ownership directly: the estimator held `116..119 BPM` and descent converged to `9.89 units/s`, clearly faster than the `60 BPM` channel test at `5.00 units/s`.
+- [Military drumbeat](https://commons.wikimedia.org/wiki/File:Militarydrumbeat.ogg) covered bright percussion and strong transitions: a 30-second pass produced at least seven discrete onsets, each using the single bounded wake and recovery while the fine atmosphere remained free of flashes.
+- [Left and right test](https://commons.wikimedia.org/wiki/File:Left_and_right_test.ogg) covered hard pans: smoothed balance traversed the complete `-1.000..1.000` range and width remained bounded at `0.000..0.500`, producing correspondence without a camera cut or topology change.
+
+The retained/tuned constants in the table above were kept after this pass. The observed tempo/speed separation, bounded stereo motion, single-wake onset behavior, and quiet fallback support their stated perceptual reasons; no additional knob tuning was warranted before landing reactivity itself.
 
 ## Issue #1 jellyfish audit evidence
 
