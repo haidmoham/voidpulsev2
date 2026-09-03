@@ -1,5 +1,10 @@
 import "./style.css";
-import { DemoMusicSignal, DisplayAudioSignal, SignalRouter } from "./audio";
+import {
+  DemoMusicSignal,
+  DisplayAudioSignal,
+  ReactivityTestSignal,
+  SignalRouter,
+} from "./audio";
 import { SourceDock } from "./presentation";
 import { FaltoneController } from "./runtime";
 import { SpotifyAuth } from "./spotify/SpotifyAuth";
@@ -13,8 +18,20 @@ if (!container) {
 
 const displaySignal = new DisplayAudioSignal();
 const signalRouter = new SignalRouter(new DemoMusicSignal());
+const testSignal = new ReactivityTestSignal();
 const spotify = new SpotifyAuth();
 const world = new FallWorld(container);
+let testActive = false;
+
+function updateSignalRoute(): void {
+  if (testActive) {
+    signalRouter.select(testSignal);
+    return;
+  }
+
+  if (displaySignal.status === "active") signalRouter.select(displaySignal);
+  else signalRouter.reset();
+}
 
 function handleCaptureAction(): void {
   if (displaySignal.status === "active") {
@@ -40,15 +57,21 @@ function handleSpotifyAction(): void {
   });
 }
 
+function handleTestAction(): void {
+  testActive = !testActive;
+  updateSignalRoute();
+  sourceDock.renderTestStatus(testActive);
+}
+
 const sourceDock = new SourceDock({
   container,
   onCaptureAction: handleCaptureAction,
+  onTestAction: handleTestAction,
   onSpotifyAction: handleSpotifyAction,
 });
 
 const unsubscribeDisplaySignal = displaySignal.subscribe((source) => {
-  if (source.status === "active") signalRouter.select(source);
-  else signalRouter.reset();
+  updateSignalRoute();
   sourceDock.renderCaptureStatus(source.status, source.label);
 });
 
@@ -56,11 +79,12 @@ const controller = new FaltoneController({
   signal: signalRouter,
   renderer: world,
   onMusicFrame: (music) => {
-    sourceDock.renderSignalLevel(music.intensity, displaySignal.status === "active");
+    sourceDock.renderSignalLevel(music.intensity, testActive || displaySignal.status === "active");
   },
 });
 
 sourceDock.renderCaptureStatus(displaySignal.status, displaySignal.label);
+sourceDock.renderTestStatus(testActive);
 sourceDock.renderSpotifyStatus(spotify.status());
 void spotify.handleCallback()
   .then((handled) => {

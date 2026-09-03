@@ -88,12 +88,23 @@ export class DisplayAudioSignal implements MusicSignal {
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length === 0) {
       stream.getTracks().forEach((track) => track.stop());
-      this.setState("error", "No audio was shared. Choose a tab and enable Share audio.");
+      this.setState(
+        "error",
+        "No audio track arrived. Choose Spotify Web Player under Chrome Tab and enable Share tab audio; app windows may be video-only.",
+      );
+      throw new Error(this.label);
+    }
+
+    const audioTrack = audioTracks[0];
+    if (!audioTrack || audioTrack.readyState !== "live") {
+      stream.getTracks().forEach((track) => track.stop());
+      this.setState("error", "The shared audio track ended before analysis could start. Rebind the Spotify Web Player tab.");
       throw new Error(this.label);
     }
 
     try {
       // The video constraint exists only to open the browser's display picker.
+      const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
       stream.getVideoTracks().forEach((track) => track.stop());
       const context = new AudioContext({ latencyHint: DISPLAY_ANALYZER_DEFAULTS.latencyHint });
       const source = context.createMediaStreamSource(stream);
@@ -128,7 +139,8 @@ export class DisplayAudioSignal implements MusicSignal {
         if (this.stream === stream) this.stop();
       }));
       if (context.state === "suspended") await context.resume();
-      this.setState("active", "Listening to shared tab audio");
+      const surface = displaySurface === "browser" ? "tab" : displaySurface ?? "source";
+      this.setState("active", `Listening to shared ${surface} audio. Local analysis only; nothing is replayed or uploaded.`);
     } catch (error) {
       stream.getTracks().forEach((track) => track.stop());
       this.release();
