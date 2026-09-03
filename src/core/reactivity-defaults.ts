@@ -4,6 +4,7 @@ export interface ReactivityDefaults {
   readonly wakeRecoveryRate: number;
   readonly onsetWakeImpulse: number;
   readonly onsetCooldownSeconds: number;
+  readonly intensityRiseMax: number;
   readonly widthExpansionMax: number;
   readonly highDustPresenceMax: number;
   readonly midCurrentPresenceMax: number;
@@ -11,22 +12,29 @@ export interface ReactivityDefaults {
   readonly transientRingOpacityMax: number;
   readonly balanceBasePull: number;
   readonly balanceWidthPull: number;
+  readonly chromaBoostMax: number;
+  readonly lightGainMax: number;
+  readonly transientPulseMax: number;
 }
 
 /**
- * These are policy caps, not a tuning-panel schema. They keep every music
- * signal local to one semantic world response and preserve quiet baseline life.
+ * Grotesque by design: this policy turns the historical ambience into an
+ * explicitly capped, music-driven event without changing fall-speed ownership.
  */
 export const REACTIVITY_DEFAULTS: Readonly<ReactivityDefaults> = Object.freeze({
   maxDeltaSeconds: 0.1,
-  wakeRecoveryRate: 1.4,
-  onsetWakeImpulse: 0.66,
+  wakeRecoveryRate: 4.8,
+  onsetWakeImpulse: 1,
   onsetCooldownSeconds: 0.12,
-  widthExpansionMax: 0.12,
-  highDustPresenceMax: 0.045,
-  midCurrentPresenceMax: 0.04,
-  lowGravityWeightMax: 0.055,
-  transientRingOpacityMax: 0.1,
-  balanceBasePull: 0.35,
-  balanceWidthPull: 0.25,
+  intensityRiseMax: 1,
+  widthExpansionMax: 1.2,
+  highDustPresenceMax: 0.45,
+  midCurrentPresenceMax: 0.4,
+  lowGravityWeightMax: 0.55,
+  transientRingOpacityMax: 1,
+  balanceBasePull: 3.5,
+  balanceWidthPull: 2.5,
+  chromaBoostMax: 1,
+  lightGainMax: 1,
+  transientPulseMax: 1,
 });

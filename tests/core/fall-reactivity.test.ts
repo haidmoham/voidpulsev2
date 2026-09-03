@@ -34,15 +34,34 @@ function settleFall(control: MusicFrame & { estimatedBpm: number }): FallState {
 }
 
 describe("fall policy", () => {
-  it("uses estimated BPM for sustained terminal speed, not intensity", () => {
+  it("uses estimated BPM as the sole audio control of terminal speed", () => {
     const slowLoud = settleFall({ ...frame({ intensity: 1, low: 1 }), estimatedBpm: 70 });
+    const slowQuiet = settleFall({ ...SILENT, estimatedBpm: 70 });
     const fastQuiet = settleFall({ ...SILENT, estimatedBpm: 160 });
     const unknownTempo = settleFall({ ...SILENT, estimatedBpm: 0 });
 
     expect(slowLoud.velocity).toBeCloseTo(5.833_333, 2);
     expect(fastQuiet.velocity).toBeCloseTo(13.333_333, 2);
     expect(unknownTempo.velocity).toBeCloseTo(6, 2);
+    expect(slowLoud.velocity).toBeCloseTo(slowQuiet.velocity, 12);
     expect(fastQuiet.velocity).toBeGreaterThan(slowLoud.velocity);
+  });
+
+  it("keeps velocity convergence identical across non-tempo audio features", () => {
+    const loud = advanceFall(
+      INITIAL_FALL_STATE,
+      { intensity: 1, estimatedBpm: 100 },
+      1 / 60,
+    );
+    const quiet = advanceFall(
+      INITIAL_FALL_STATE,
+      { intensity: 0, estimatedBpm: 100 },
+      1 / 60,
+    );
+
+    expect(loud.velocity).toBe(quiet.velocity);
+    expect(loud.distance).toBe(quiet.distance);
+    expect(loud.intensity).not.toBe(quiet.intensity);
   });
 
   it("clamps frame delta and keeps total distance outside the looping corridor", () => {
@@ -83,11 +102,12 @@ describe("reactivity policy", () => {
       1 / 60,
     );
 
-    expect(step.reactivity.gravityWeight).toBeCloseTo(0.055, 8);
-    expect(step.reactivity.currentPresence).toBeCloseTo(0.04, 8);
-    expect(step.reactivity.dustPresence).toBeCloseTo(0.045, 8);
-    expect(step.reactivity.soundstageScale).toBeCloseTo(1.12, 8);
-    expect(step.reactivity.lateralPull).toBeCloseTo(-0.6, 8);
+    expect(step.reactivity.gravityWeight).toBeCloseTo(0.55, 8);
+    expect(step.reactivity.currentPresence).toBeCloseTo(0.4, 8);
+    expect(step.reactivity.dustPresence).toBeCloseTo(0.45, 8);
+    expect(step.reactivity.soundstageScale).toBeCloseTo(2.2, 8);
+    expect(step.reactivity.lateralPull).toBeCloseTo(-6, 8);
+    expect(step.reactivity.chromaBoost).toBe(1);
   });
 
   it("creates one bounded onset wake and recovers deterministically", () => {
@@ -97,7 +117,9 @@ describe("reactivity policy", () => {
     const held = advanceReactivity(first.state, fall, onset, 4 + 1 / 60, 1 / 60);
     const recovered = advanceReactivity(held.state, fall, SILENT, 5, 0.1);
 
-    expect(first.reactivity.wakeEnergy).toBeCloseTo(0.66, 8);
+    expect(first.reactivity.wakeEnergy).toBe(1);
+    expect(first.reactivity.wakeRingOpacity).toBe(1);
+    expect(first.reactivity.transientPulse).toBe(1);
     expect(held.reactivity.wakeEnergy).toBeLessThan(first.reactivity.wakeEnergy);
     expect(held.reactivity.wakeEnergy).toBeLessThanOrEqual(1);
     expect(recovered.reactivity.wakeEnergy).toBeLessThan(held.reactivity.wakeEnergy);
@@ -122,5 +144,37 @@ describe("reactivity policy", () => {
     };
 
     expect(run()).toEqual(run());
+  });
+
+  it("clamps malformed music and state inputs to finite renderer-safe values", () => {
+    const corruptedFall: FallState = { distance: Number.NaN, velocity: Infinity, intensity: -Infinity };
+    const corruptedMusic = frame({
+      intensity: Number.NaN,
+      transient: Infinity,
+      low: Number.NaN,
+      mid: Infinity,
+      high: -Infinity,
+      balance: Infinity,
+      width: Number.NaN,
+    });
+    const step = advanceReactivity(
+      { previousIntensity: Infinity, wakeEnergy: Number.NaN, onsetCooldown: Infinity },
+      corruptedFall,
+      corruptedMusic,
+      Number.NaN,
+      Infinity,
+    );
+
+    for (const value of Object.values(step.reactivity)) expect(Number.isFinite(value)).toBe(true);
+    expect(step.reactivity.cameraDepth).toBeGreaterThanOrEqual(0);
+    expect(step.reactivity.cameraDepth).toBeLessThan(FALL_LOOP_DEPTH);
+    expect(step.reactivity.intensityRise).toBeGreaterThanOrEqual(0);
+    expect(step.reactivity.intensityRise).toBeLessThanOrEqual(1);
+    expect(step.reactivity.chromaBoost).toBeGreaterThanOrEqual(0);
+    expect(step.reactivity.chromaBoost).toBeLessThanOrEqual(1);
+    expect(step.reactivity.lightGain).toBeGreaterThanOrEqual(0);
+    expect(step.reactivity.lightGain).toBeLessThanOrEqual(1);
+    expect(step.reactivity.transientPulse).toBeGreaterThanOrEqual(0);
+    expect(step.reactivity.transientPulse).toBeLessThanOrEqual(1);
   });
 });

@@ -39,7 +39,7 @@ export interface ReactivityFrame {
   readonly paletteDrift: number;
   /** Stereo width opens the field, without altering its topology. */
   readonly soundstageScale: number;
-  /** High-frequency material presence, capped for a non-flashing atmosphere. */
+  /** High-frequency material presence, intentionally overshot but bounded. */
   readonly dustPresence: number;
   /** Mid-frequency current presence, kept separate from camera motion. */
   readonly currentPresence: number;
@@ -49,6 +49,12 @@ export interface ReactivityFrame {
   readonly lateralPull: number;
   /** The bounded visual remainder of a discrete onset. */
   readonly wakeRingOpacity: number;
+  /** Spectral colour pressure for renderer materials, from 0 to 1. */
+  readonly chromaBoost: number;
+  /** Intensity-derived light pressure for renderer lights/materials, from 0 to 1. */
+  readonly lightGain: number;
+  /** Immediate transient/onset pressure for renderer pulses, from 0 to 1. */
+  readonly transientPulse: number;
 }
 
 /** The next persistent reactivity state and its derived frame values. */

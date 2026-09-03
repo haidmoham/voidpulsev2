@@ -1,6 +1,22 @@
 :root {
   color-scheme: dark;
-  background: #160f18;
+  --ink: #140817;
+  --plum-dark: #211029;
+  --plum-deep: #3a153d;
+  --plum-surface: #2b1032;
+  --plum-raised: #34123b;
+  --plum-bright: #4a1c44;
+  --ivory: #fff1ed;
+  --blush: #ddbfc9;
+  --mauve: #a98194;
+  --coral: #ee4f70;
+  --clay: #bd6d5d;
+  --gold: #b79065;
+  --slate: #75617f;
+  --violet: #a64de0;
+  --green: #687a73;
+  --pink: #ff7892;
+  background: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -32,24 +48,40 @@ canvas {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.9rem;
-  border: 1px solid rgb(255 228 203 / 24%);
-  border-radius: 1rem;
-  color: rgb(255 255 255 / 78%);
+  border: 1px solid rgb(255 241 237 / 31%);
+  border-radius: 0.25rem 1.15rem 0.35rem 0.9rem;
+  color: var(--blush);
   background:
-    linear-gradient(135deg, rgb(53 35 51 / 76%), rgb(22 15 24 / 72%));
-  box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 20%);
-  backdrop-filter: blur(18px);
+    linear-gradient(116deg, transparent 0 68%, rgb(166 77 224 / 16%) 68.2% 69.7%, transparent 70%),
+    linear-gradient(164deg, rgb(189 109 93 / 14%) 0 11%, transparent 11.2% 100%),
+    radial-gradient(circle at 92% 7%, rgb(238 79 112 / 17%), transparent 29%),
+    radial-gradient(circle at 2% 103%, rgb(104 122 115 / 19%), transparent 31%),
+    linear-gradient(138deg, rgb(74 28 68 / 95%), rgb(43 16 50 / 93%) 48%, rgb(20 8 23 / 95%));
+  box-shadow:
+    0 1.4rem 4rem rgb(0 0 0 / 47%),
+    0 0 0 1px rgb(166 77 224 / 10%) inset,
+    0 -2.75rem 4rem rgb(20 8 23 / 50%) inset;
+  backdrop-filter: blur(22px) saturate(140%);
   transition:
     border-color 240ms cubic-bezier(0.2, 0.75, 0.3, 1),
+    box-shadow 240ms cubic-bezier(0.2, 0.75, 0.3, 1),
     background-color 240ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 
 .source-dock[data-status="active"] {
-  border-color: rgb(209 161 93 / 46%);
+  border-color: rgb(238 79 112 / 75%);
+  box-shadow:
+    0 1.4rem 4rem rgb(0 0 0 / 52%),
+    0 0 0 1px rgb(255 120 146 / 24%) inset,
+    0 0 2.5rem rgb(238 79 112 / 16%);
 }
 
 .source-dock[data-status="testing"] {
-  border-color: rgb(136 162 142 / 62%);
+  border-color: rgb(166 77 224 / 78%);
+  box-shadow:
+    0 1.4rem 4rem rgb(0 0 0 / 52%),
+    0 0 0 1px rgb(255 241 237 / 14%) inset,
+    0 0 2.5rem rgb(166 77 224 / 18%);
 }
 
 .source-readout {
@@ -57,27 +89,55 @@ canvas {
   display: grid;
   gap: 0.2rem;
   min-height: 4.5rem;
-  padding: 0.15rem 0.15rem 0.85rem;
+  padding: 0.15rem 3rem 0.85rem 0.15rem;
+}
+
+.source-readout::before,
+.source-readout::after {
+  position: absolute;
+  pointer-events: none;
+  content: "";
+}
+
+.source-readout::before {
+  top: 0.05rem;
+  right: 0.25rem;
+  width: 2.05rem;
+  height: 2.05rem;
+  border: 1px solid rgb(255 241 237 / 28%);
+  background: linear-gradient(135deg, var(--violet) 0 48%, var(--coral) 49% 69%, var(--gold) 70%);
+  clip-path: polygon(14% 0, 100% 0, 100% 83%, 51% 100%, 0 72%);
+  opacity: 0.64;
+}
+
+.source-readout::after {
+  top: 0.18rem;
+  right: 2.75rem;
+  width: 0.72rem;
+  height: 0.22rem;
+  background: var(--gold);
+  box-shadow: 0 0 1rem rgb(183 144 101 / 55%);
 }
 
 .source-kicker {
-  color: rgb(209 161 93 / 72%);
+  color: var(--gold);
   font-size: 0.62rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .source-name {
-  color: #f2e5d4;
+  color: var(--ivory);
   font-size: 1rem;
-  font-weight: 560;
-  letter-spacing: -0.015em;
+  font-weight: 670;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 0 rgb(20 8 23 / 75%);
 }
 
 .source-detail {
   max-width: 35rem;
-  color: #9a837e;
+  color: var(--blush);
   font-size: 0.72rem;
   line-height: 1.35;
 }
@@ -89,15 +149,16 @@ canvas {
   right: 0.15rem;
   bottom: 0.25rem;
   left: 0.15rem;
-  height: 1px;
+  height: 2px;
   overflow: hidden;
-  background: rgb(255 228 203 / 10%);
+  background: linear-gradient(90deg, rgb(255 241 237 / 14%), rgb(255 241 237 / 3%));
 }
 
 .source-meter::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #88a28e, #c06a59 68%, #d1a15d);
+  background: linear-gradient(90deg, var(--green), var(--violet) 48%, var(--coral) 76%, var(--pink));
+  box-shadow: 0 0 0.8rem rgb(255 120 146 / 80%);
   content: "";
   transform: scaleX(var(--signal-level));
   transform-origin: left;
@@ -115,11 +176,16 @@ canvas {
   gap: 0.7rem;
   align-items: center;
   padding: 0.6rem 0.65rem 0.6rem 0.7rem;
-  border: 1px solid rgb(255 228 203 / 9%);
-  border-radius: 0.72rem;
-  background: rgb(255 239 214 / 3%);
+  border: 1px solid rgb(255 241 237 / 16%);
+  border-left: 3px solid rgb(183 144 101 / 55%);
+  border-radius: 0.18rem 0.82rem 0.22rem 0.62rem;
+  background:
+    linear-gradient(105deg, rgb(255 241 237 / 8%), transparent 44%),
+    rgb(33 16 41 / 62%);
+  box-shadow: 0 0.75rem 1.6rem rgb(20 8 23 / 16%) inset;
   transition:
     border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-left-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -129,98 +195,138 @@ canvas {
 }
 
 .source-option-name {
-  color: #e7d9ce;
+  color: var(--ivory);
   font-size: 0.73rem;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0.015em;
 }
 
 .source-action {
   min-height: 2.25rem;
   cursor: pointer;
-  border: 1px solid rgb(255 228 203 / 16%);
+  border: 1px solid rgb(255 241 237 / 37%);
   border-radius: 999px;
   min-width: 5.7rem;
   padding: 0.55rem 0.72rem;
-  color: #c9b6ac;
+  color: var(--ivory);
   font: inherit;
   font-size: 0.68rem;
-  font-weight: 650;
+  font-weight: 760;
   letter-spacing: 0.055em;
   text-transform: lowercase;
-  background: rgb(255 239 214 / 6%);
+  background:
+    linear-gradient(106deg, rgb(255 241 237 / 17%), transparent 46%),
+    rgb(74 28 68 / 72%);
+  box-shadow: 0 0.5rem 1rem rgb(20 8 23 / 27%);
   transition:
     color 160ms cubic-bezier(0.2, 0.75, 0.3, 1),
     border-color 160ms cubic-bezier(0.2, 0.75, 0.3, 1),
     background-color 160ms cubic-bezier(0.2, 0.75, 0.3, 1),
+    box-shadow 160ms cubic-bezier(0.2, 0.75, 0.3, 1),
     transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .source-option:hover {
+    border-color: rgb(255 120 146 / 48%);
+    border-left-color: var(--coral);
+    background-color: rgb(74 28 68 / 75%);
+  }
+
   .source-action:hover:not(:disabled) {
-    color: #f2e5d4;
-    border-color: rgb(255 228 203 / 32%);
-    background: rgb(255 239 214 / 10%);
+    color: var(--ink);
+    border-color: var(--ivory);
+    background-color: var(--ivory);
+    box-shadow: 0 0 1.2rem rgb(255 120 146 / 31%);
   }
 }
 
 .source-action:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.965);
+}
+
+.source-action:focus-visible,
+.source-notes summary:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
 }
 
 .capture-action {
-  color: #f2e5d4;
-  border-color: rgb(180 134 161 / 36%);
+  border-color: rgb(183 144 101 / 67%);
+  background:
+    linear-gradient(112deg, rgb(183 144 101 / 24%), transparent 52%),
+    rgb(74 28 68 / 82%);
 }
 
 .capture-option[data-active="true"] {
-  border-color: rgb(209 161 93 / 32%);
-  background: rgb(192 106 89 / 8%);
+  border-color: rgb(255 120 146 / 68%);
+  border-left-color: var(--coral);
+  background:
+    linear-gradient(111deg, rgb(238 79 112 / 28%), transparent 58%),
+    rgb(74 28 68 / 83%);
 }
 
 .capture-action[data-status="active"] {
-  color: #f2e5d4;
-  border-color: rgb(209 161 93 / 52%);
-  background: rgb(192 106 89 / 14%);
+  color: var(--ivory);
+  border-color: var(--pink);
+  background:
+    linear-gradient(110deg, rgb(255 120 146 / 39%), transparent 55%),
+    rgb(189 109 93 / 63%);
+  box-shadow: 0 0 1.4rem rgb(238 79 112 / 30%);
 }
 
 .test-option[data-active="true"] {
-  border-color: rgb(136 162 142 / 38%);
-  background: rgb(136 162 142 / 8%);
+  border-color: rgb(166 77 224 / 72%);
+  border-left-color: var(--violet);
+  background:
+    linear-gradient(108deg, rgb(166 77 224 / 29%), transparent 57%),
+    rgb(58 21 61 / 84%);
 }
 
 .test-action[data-status="active"] {
-  color: #d9f2df;
-  border-color: rgb(136 162 142 / 62%);
-  background: rgb(136 162 142 / 14%);
+  color: var(--ivory);
+  border-color: rgb(166 77 224 / 86%);
+  background:
+    linear-gradient(110deg, rgb(166 77 224 / 44%), transparent 55%),
+    rgb(74 28 68 / 86%);
+  box-shadow: 0 0 1.4rem rgb(166 77 224 / 29%);
 }
 
 .spotify-option[data-status="connected"] {
-  border-color: rgb(29 185 84 / 28%);
+  border-color: rgb(104 122 115 / 88%);
+  border-left-color: var(--green);
+  background:
+    linear-gradient(108deg, rgb(104 122 115 / 26%), transparent 56%),
+    rgb(43 16 50 / 83%);
 }
 
 .spotify-auth[data-status="connected"] {
-  border-color: rgb(29 185 84 / 55%);
-  color: #b9f6cf;
+  color: var(--ivory);
+  border-color: rgb(104 122 115 / 91%);
+  background:
+    linear-gradient(110deg, rgb(104 122 115 / 48%), transparent 58%),
+    rgb(43 16 50 / 90%);
 }
 
 .source-action:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.62;
 }
 
 .source-notes {
   margin-top: 0.7rem;
-  color: #88746f;
+  border-top: 1px solid rgb(183 144 101 / 32%);
+  color: var(--mauve);
   font-size: 0.64rem;
   line-height: 1.4;
 }
 
 .source-notes summary {
   width: fit-content;
+  padding-top: 0.55rem;
   cursor: pointer;
-  color: #b99b88;
-  font-weight: 650;
+  color: var(--blush);
+  font-weight: 700;
   letter-spacing: 0.02em;
   list-style: none;
 }
@@ -230,13 +336,15 @@ canvas {
 }
 
 .source-notes summary::before {
-  display: inline-block;
-  width: 0.9rem;
-  color: #d1a15d;
+  display: inline-grid;
+  width: 1rem;
+  color: var(--gold);
   content: "+";
+  place-items: center;
 }
 
 .source-notes[open] summary::before {
+  color: var(--coral);
   content: "−";
 }
 
@@ -249,17 +357,41 @@ canvas {
 .source-note {
   display: grid;
   gap: 0.1rem;
-  padding-left: 0.1rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid rgb(166 77 224 / 50%);
 }
 
 .source-note strong {
-  color: #c9b6ac;
+  color: var(--blush);
   font-size: 0.65rem;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .source-note span {
-  color: #88746f;
+  color: var(--mauve);
+}
+
+@media (prefers-contrast: more) {
+  .source-dock {
+    border-color: var(--ivory);
+    background: var(--plum-dark);
+    backdrop-filter: none;
+  }
+
+  .source-option {
+    border-color: rgb(255 241 237 / 65%);
+    background: var(--plum-surface);
+  }
+
+  .source-detail,
+  .source-notes summary,
+  .source-note strong {
+    color: var(--ivory);
+  }
+
+  .source-note span {
+    color: var(--blush);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
