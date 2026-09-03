@@ -44,18 +44,85 @@ export function advanceReactivity(
   const transient = clampFinite(music.transient, 0, 1);
   const balance = clampFinite(music.balance, -1, 1);
   const width = clampFinite(music.width, 0, 1);
-  const chromaBoost = clampFinite(
+  const targetChromaBoost = clampFinite(
     (low * 0.2 + mid * 0.65 + high) * policy.chromaBoostMax,
     0,
     policy.chromaBoostMax,
   );
-  const lightGain = clampFinite(
+  const targetLightGain = clampFinite(
     (intensity * 0.72 + intensityRise * 0.8 + high * 0.24) * policy.lightGainMax,
     0,
     policy.lightGainMax,
   );
-  const transientPulse = clampFinite(
+  const chromaBoost = smoothResponse(
+    previous.chromaBoost,
+    targetChromaBoost,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.chromaBoostMax,
+  );
+  const lightGain = smoothResponse(
+    previous.lightGain,
+    targetLightGain,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.lightGainMax,
+  );
+  const targetTransientPulse = clampFinite(
     Math.max(transient, wakeEnergy) * policy.transientPulseMax,
+    0,
+    policy.transientPulseMax,
+  );
+  const soundstagePresence = smoothResponse(
+    previous.soundstagePresence,
+    width * policy.widthExpansionMax,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.widthExpansionMax,
+  );
+  const dustPresence = smoothResponse(
+    previous.dustPresence,
+    high * policy.highDustPresenceMax,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.highDustPresenceMax,
+  );
+  const currentPresence = smoothResponse(
+    previous.currentPresence,
+    mid * policy.midCurrentPresenceMax,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.midCurrentPresenceMax,
+  );
+  const gravityWeight = smoothResponse(
+    previous.gravityWeight,
+    low * policy.lowGravityWeightMax,
+    delta,
+    policy.motionResponseRate,
+    0,
+    policy.lowGravityWeightMax,
+  );
+  const lateralLimit = policy.balanceBasePull + policy.balanceWidthPull;
+  const lateralPull = smoothResponse(
+    previous.lateralPull,
+    balance * (policy.balanceBasePull + width * policy.balanceWidthPull),
+    delta,
+    policy.motionResponseRate,
+    -lateralLimit,
+    lateralLimit,
+  );
+  const transientPulse = smoothResponse(
+    previous.transientPulse,
+    targetTransientPulse,
+    delta,
+    targetTransientPulse > previousFinite(previous.transientPulse, 0)
+      ? policy.transientAttackRate
+      : policy.transientReleaseRate,
     0,
     policy.transientPulseMax,
   );
@@ -65,6 +132,14 @@ export function advanceReactivity(
       previousIntensity: intensity,
       wakeEnergy,
       onsetCooldown: onset ? policy.onsetCooldownSeconds : onsetCooldown,
+      soundstagePresence,
+      dustPresence,
+      currentPresence,
+      gravityWeight,
+      lateralPull,
+      transientPulse,
+      chromaBoost,
+      lightGain,
     },
     reactivity: {
       cameraDepth,
@@ -74,12 +149,12 @@ export function advanceReactivity(
       weather,
       breath,
       paletteDrift,
-      soundstageScale: 1 + width * policy.widthExpansionMax,
-      dustPresence: high * policy.highDustPresenceMax,
-      currentPresence: mid * policy.midCurrentPresenceMax,
-      gravityWeight: low * policy.lowGravityWeightMax,
-      lateralPull: balance * (policy.balanceBasePull + width * policy.balanceWidthPull),
-      wakeRingOpacity: wakeEnergy * policy.transientRingOpacityMax,
+      soundstageScale: 1 + soundstagePresence,
+      dustPresence,
+      currentPresence,
+      gravityWeight,
+      lateralPull,
+      wakeRingOpacity: transientPulse * policy.transientRingOpacityMax,
       chromaBoost,
       lightGain,
       transientPulse,
@@ -98,4 +173,22 @@ function clampFinite(value: number, minimum: number, maximum: number): number {
 
 function finiteOr(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
+}
+
+function previousFinite(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) ? value : fallback;
+}
+
+function smoothResponse(
+  previous: number | undefined,
+  target: number,
+  delta: number,
+  rate: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const start = clampFinite(previousFinite(previous, 0), minimum, maximum);
+  const boundedTarget = clampFinite(target, minimum, maximum);
+  const response = 1 - Math.exp(-delta * Math.max(0, finiteOr(rate, 0)));
+  return clampFinite(start + (boundedTarget - start) * response, minimum, maximum);
 }

@@ -76,12 +76,20 @@ canvas {
     0 0 2.5rem rgb(238 79 112 / 16%);
 }
 
-.source-dock[data-status="testing"] {
+.source-dock[data-status="demo"] {
   border-color: rgb(166 77 224 / 78%);
   box-shadow:
     0 1.4rem 4rem rgb(0 0 0 / 52%),
     0 0 0 1px rgb(255 241 237 / 14%) inset,
     0 0 2.5rem rgb(166 77 224 / 18%);
+}
+
+.source-dock[data-status="licensed-demo"] {
+  border-color: rgb(104 122 115 / 80%);
+  box-shadow:
+    0 1.4rem 4rem rgb(0 0 0 / 52%),
+    0 0 0 1px rgb(183 144 101 / 20%) inset,
+    0 0 2.5rem rgb(104 122 115 / 18%);
 }
 
 .source-readout {
@@ -143,8 +151,6 @@ canvas {
 }
 
 .source-meter {
-  --signal-level: 0;
-
   position: absolute;
   right: 0.15rem;
   bottom: 0.25rem;
@@ -154,13 +160,12 @@ canvas {
   background: linear-gradient(90deg, rgb(255 241 237 / 14%), rgb(255 241 237 / 3%));
 }
 
-.source-meter::after {
+.source-meter-fill {
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, var(--green), var(--violet) 48%, var(--coral) 76%, var(--pink));
   box-shadow: 0 0 0.8rem rgb(255 120 146 / 80%);
-  content: "";
-  transform: scaleX(var(--signal-level));
+  transform: scaleX(0);
   transform-origin: left;
   transition: transform 80ms linear;
 }
@@ -275,7 +280,7 @@ canvas {
   box-shadow: 0 0 1.4rem rgb(238 79 112 / 30%);
 }
 
-.test-option[data-active="true"] {
+.demo-option[data-active="true"] {
   border-color: rgb(166 77 224 / 72%);
   border-left-color: var(--violet);
   background:
@@ -283,13 +288,30 @@ canvas {
     rgb(58 21 61 / 84%);
 }
 
-.test-action[data-status="active"] {
+.demo-action[data-status="active"] {
   color: var(--ivory);
   border-color: rgb(166 77 224 / 86%);
   background:
     linear-gradient(110deg, rgb(166 77 224 / 44%), transparent 55%),
     rgb(74 28 68 / 86%);
   box-shadow: 0 0 1.4rem rgb(166 77 224 / 29%);
+}
+
+.licensed-demo-option[data-active="true"] {
+  border-color: rgb(104 122 115 / 82%);
+  border-left-color: var(--green);
+  background:
+    linear-gradient(108deg, rgb(104 122 115 / 28%), transparent 57%),
+    rgb(43 16 50 / 84%);
+}
+
+.licensed-demo-action[data-status="active"] {
+  color: var(--ivory);
+  border-color: rgb(104 122 115 / 91%);
+  background:
+    linear-gradient(110deg, rgb(104 122 115 / 45%), transparent 55%),
+    rgb(43 16 50 / 90%);
+  box-shadow: 0 0 1.4rem rgb(104 122 115 / 27%);
 }
 
 .spotify-option[data-status="connected"] {
@@ -396,7 +418,7 @@ canvas {
 
 @media (prefers-reduced-motion: reduce) {
   .source-dock,
-  .source-meter::after,
+  .source-meter-fill,
   .source-action,
   .source-option {
     transition: none;

@@ -4,7 +4,7 @@
 
 Faltone is a Three.js experiment in falling through the temporal structure of a song. Locomotion is the primary visualization channel: audio features become control signals, control signals drive fall dynamics, and fall dynamics shape the rendered world.
 
-The current prototype has an endless falling corridor and can switch between a synthetic music frame and live, local analysis of a shared browser tab.
+The current prototype has an endless falling corridor. It starts with an original ambient procedural current, can run a deterministic Demo mode, and can analyze either a shared browser tab or an explicitly configured rights-cleared sample.
 
 ```text
 music source → perceptual feature frame → fall/reactivity models → rendered experience
@@ -19,16 +19,31 @@ npm run dev
 
 Use `npm run build` for a production build.
 
-## Listen to real music
+## Audio sources
+
+The default ambient procedural current is generated in the browser; it is not a recording and does not play a song. **Demo mode** is a deterministic full-response/silence comparison, also not music. The dock says which source is currently active.
+
+### Optional licensed sample
+
+The repository ships without external audio. A site owner may opt in to one sample by setting `VITE_DEMO_AUDIO_URL` in `.env.local` to a direct, rights-cleared `http(s)` audio URL. The source must permit cross-origin Web Audio analysis with CORS headers. Add the following only when they are factual and provided by the rights holder or source page:
+
+- `VITE_DEMO_AUDIO_TITLE`
+- `VITE_DEMO_AUDIO_ATTRIBUTION`
+- `VITE_DEMO_AUDIO_LICENSE`
+- `VITE_DEMO_AUDIO_LICENSE_URL`
+
+When configured, the dock identifies the sample with exactly that supplied metadata, and the browser loops it only after the listener presses **play sample**. Do not use Spotify, Apple Music, or other service previews; do not use audio you do not have permission to play and analyze.
+
+### Live browser-tab audio
 
 Faltone can analyze audio from a surface you explicitly share through the browser's native picker.
 
-1. Play music in the Spotify Web Player in a separate browser tab.
-2. Select **bind music source** in Faltone.
-3. Choose the Spotify tab and enable **Share audio**.
-4. Use **release source** or the browser's sharing control to stop.
+1. Play audio in a separate browser tab.
+2. Select **choose tab** in Faltone.
+3. Choose the playing tab and enable **Share audio**.
+4. Use **release tab** or the browser's sharing control to stop.
 
-Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Faltone does not record, replay, spatialize, or upload it. When capture ends, the scene returns to its synthetic signal.
+Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Faltone does not record, replay, spatialize, or upload it. When capture ends, the scene returns to its original ambient procedural current.
 
 The analyser currently derives intensity, transient energy, discrete onsets, estimated tempo, low/mid/high energy, stereo balance, and stereo width. These features drive the visual soundstage while the listener continues hearing Spotify normally.
 
@@ -37,7 +52,7 @@ The analyser currently derives intensity, transient energy, discrete onsets, est
 The invariant is intentionally narrow: **the listener falls through the temporal structure of the song.** The renderer does not inspect FFT data or retain audio envelopes. It only receives a complete, derived `WorldFrame`.
 
 ```text
-local tab capture or synthetic source
+local tab capture, configured licensed sample, or ambient procedural current
   -> reusable Web Audio buffers
   -> pure MusicAnalyzer
   -> MusicFrame
@@ -48,19 +63,19 @@ local tab capture or synthetic source
 
 | Musical meaning | Derived world response | Cap / perceptual reason |
 |---|---|---|
-| estimated BPM | terminal fall speed | 5–15 corridor units/s; tempo establishes pace while intensity and bass only change convergence |
-| intensity + low | acceleration response rate | makes a bass-heavy passage feel heavier without changing its BPM-defined destination |
-| low | gravity weight | `0..0.055`; large body weight stays local to the gravity well |
-| mid | current presence | `0..0.04`; makes the existing current more readable without adding camera noise |
-| high | dust presence | `0..0.045`; bright percussion thickens material rather than flashing the scene |
-| balance + width | lateral pull | `-0.6..0.6`; a bounded spatial correspondence, not a camera sway system |
-| width | soundstage scale | `1..1.12`; opens the familiar field without topology changes |
-| discrete onset | wake ring opacity | `0..0.1`; one recovering impulse, with cooldown, rather than repeated beat effects |
+| estimated BPM | terminal fall speed | 5–15 corridor units/s; tempo is the sole audio input to descent velocity and convergence |
+| intensity + spectrum | smoothed material and light pressure | changes the field without giving non-tempo features any authority over descent |
+| low | gravity weight | `0..0.55`; large body weight stays local to the gravity well |
+| mid | current presence | `0..0.4`; makes the existing current more readable without adding camera noise |
+| high | dust presence | `0..0.45`; bright percussion thickens material rather than flashing the scene |
+| balance + width | lateral pull | `-6..6`, then reduced before it reaches the camera; a bounded spatial correspondence, not a sway system |
+| width | soundstage scale | `1..2.2`; opens the familiar field without topology changes |
+| discrete onset | local wake and ring | `0..1`; one recovering impulse, with cooldown, rather than repeated beat effects |
 
 The aperture pulse and landmark breathing remain independent environmental motion. Their locked equations are unchanged:
 
 ```ts
-1 + Math.sin(timeSeconds * 0.13 + aperture.phase) * 0.055
+1 + Math.sin(timeSeconds * 0.13 + aperture.phase) * 0.075
 Math.sin(timeSeconds * 0.18 + seed.phase) * 0.018 * weather
 ```
 
@@ -81,10 +96,10 @@ The analyzer retains the pre-topology Voidpulse starting values below. Release w
 | stereo smoothing | `0.12 s` | tuned; pans correspond without inducing nausea |
 | fall tempo range / fallback | `60–180 BPM` / `72 BPM` | tuned; gives an audible-but-calm default descent while preserving a practical tempo span |
 | terminal speed range | `5–15 units/s` | tuned for the fixed 180-unit corridor to feel continuous rather than hurried |
-| intensity / bass response gains | `1.35` / `1.1` | tuned; energy controls heaviness, never sustained terminal speed |
-| soundstage / dust / current / gravity caps | `0.12` / `0.045` / `0.04` / `0.055` | retained checkpoint gains; keeps the structural core stable |
-| balance pull | `0.35 + width * 0.25` | retained checkpoint mapping; bounded at `±0.6` |
-| wake impulse / recovery / ring cap | `0.66` / `1.4` / `0.1` | tuned; a transition lands once and fades without turning into a new rhythm layer |
+| fall velocity response | `4.2 s⁻¹` | establishes the BPM-owned descent in the first second without making other features velocity inputs |
+| soundstage / dust / current / gravity caps | `1.2` / `0.45` / `0.4` / `0.55` | capped and low-pass filtered before they reach the world |
+| balance pull | `3.5 + width * 2.5` | capped at `±6`, then reduced before it reaches the camera |
+| wake impulse / recovery / ring cap | `1` / `4.8 s⁻¹` / `1` | localized wake geometry may land promptly while full-field pressure stays low-pass filtered |
 
 ## Verification and QA boundary
 
@@ -127,7 +142,7 @@ The initial scope is `user-read-playback-state`, matching v1's listening-along p
 
 ## Structure
 
-- `src/audio`: capture/demo adapters and active-source routing.
+- `src/audio`: capture, ambient-current/Demo-mode, optional licensed-sample adapters, and active-source routing.
 - `src/core`: pure fall, loop, and reactivity models plus renderer-independent frame types.
 - `src/runtime`: frame timing and state ownership.
 - `src/presentation`: DOM controls and source status.

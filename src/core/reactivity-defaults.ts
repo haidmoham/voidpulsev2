@@ -15,6 +15,11 @@ export interface ReactivityDefaults {
   readonly chromaBoostMax: number;
   readonly lightGainMax: number;
   readonly transientPulseMax: number;
+  /** Shared low-pass rate for scale, current, gravity, and lateral motion. */
+  readonly motionResponseRate: number;
+  /** Full-field transient pressure shares the world-response rate; wakes stay local and immediate. */
+  readonly transientAttackRate: number;
+  readonly transientReleaseRate: number;
 }
 
 /**
@@ -37,4 +42,7 @@ export const REACTIVITY_DEFAULTS: Readonly<ReactivityDefaults> = Object.freeze({
   chromaBoostMax: 1,
   lightGainMax: 1,
   transientPulseMax: 1,
+  motionResponseRate: 4.2,
+  transientAttackRate: 4.2,
+  transientReleaseRate: 3.8,
 });

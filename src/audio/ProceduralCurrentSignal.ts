@@ -1,8 +1,8 @@
 import type { MusicFrame } from "../core";
 import type { MusicSignal } from "./MusicSignal";
 
-/** A synthetic current used until the listener binds a live music source. */
-export class DemoMusicSignal implements MusicSignal {
+/** The original in-browser ambient current used while no audio source is bound. */
+export class ProceduralCurrentSignal implements MusicSignal {
   sample(timeSeconds: number): MusicFrame {
     const breath = 0.5 + 0.5 * Math.sin(timeSeconds * 0.55);
     const pulse = Math.max(0, Math.sin(timeSeconds * 2.1)) ** 10;

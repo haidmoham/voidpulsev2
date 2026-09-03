@@ -2,6 +2,7 @@ import type { MusicSignal } from "../audio/MusicSignal";
 import {
   advanceFall,
   advanceReactivity,
+  advanceSimulationTime,
   INITIAL_FALL_STATE,
   INITIAL_REACTIVITY_STATE,
   type FallState,
@@ -41,7 +42,8 @@ export class FaltoneController {
   private readonly scheduler: FrameScheduler;
   private fallState: FallState = INITIAL_FALL_STATE;
   private reactivityState: ReactivityState = INITIAL_REACTIVITY_STATE;
-  private previousTime: number | null = null;
+  private previousWallTime: number | null = null;
+  private simulationTime = 0;
   private frameHandle: number | null = null;
 
   constructor(options: FaltoneControllerOptions) {
@@ -59,7 +61,8 @@ export class FaltoneController {
   stop(): void {
     if (this.frameHandle !== null) this.scheduler.cancel(this.frameHandle);
     this.frameHandle = null;
-    this.previousTime = null;
+    this.previousWallTime = null;
+    this.simulationTime = 0;
   }
 
   resize(): void {
@@ -72,11 +75,15 @@ export class FaltoneController {
   }
 
   private readonly frame = (timeMilliseconds: number): void => {
-    const timeSeconds = timeMilliseconds / 1000;
-    const deltaSeconds = this.previousTime === null
+    const wallTimeSeconds = Number.isFinite(timeMilliseconds) ? timeMilliseconds / 1000 : 0;
+    const rawDeltaSeconds = this.previousWallTime === null
       ? 1 / 60
-      : Math.min(0.1, Math.max(0, timeSeconds - this.previousTime));
-    const music = this.signal.sample(timeSeconds);
+      : wallTimeSeconds - this.previousWallTime;
+    const simulation = advanceSimulationTime(this.simulationTime, rawDeltaSeconds);
+    const { deltaSeconds, timeSeconds } = simulation;
+    // Audio analysis keeps its real sampling clock; renderer phases use only
+    // the clamped simulation clock carried by WorldFrame.
+    const music = this.signal.sample(wallTimeSeconds);
     const fall = advanceFall(this.fallState, music, deltaSeconds);
     const step = advanceReactivity(
       this.reactivityState,
@@ -94,7 +101,8 @@ export class FaltoneController {
 
     this.fallState = fall;
     this.reactivityState = step.state;
-    this.previousTime = timeSeconds;
+    this.previousWallTime = wallTimeSeconds;
+    this.simulationTime = timeSeconds;
     this.onMusicFrame?.(music);
     this.renderer.render(frame);
     this.frameHandle = this.scheduler.request(this.frame);

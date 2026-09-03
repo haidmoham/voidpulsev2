@@ -1,8 +1,10 @@
 import "./style.css";
 import {
-  DemoMusicSignal,
   DisplayAudioSignal,
-  ReactivityTestSignal,
+  LicensedDemoAudioSignal,
+  ProceduralCurrentSignal,
+  ReactivityDemoSignal,
+  readDemoAudioConfig,
   SignalRouter,
 } from "./audio";
 import { SourceDock } from "./presentation";
@@ -17,15 +19,21 @@ if (!container) {
 }
 
 const displaySignal = new DisplayAudioSignal();
-const signalRouter = new SignalRouter(new DemoMusicSignal());
-const testSignal = new ReactivityTestSignal();
+const signalRouter = new SignalRouter(new ProceduralCurrentSignal());
+const reactivityDemoSignal = new ReactivityDemoSignal();
+const licensedDemoAudio = new LicensedDemoAudioSignal(readDemoAudioConfig(import.meta.env));
 const spotify = new SpotifyAuth();
 const world = new FallWorld(container);
-let testActive = false;
+let reactivityDemoActive = false;
 
 function updateSignalRoute(): void {
-  if (testActive) {
-    signalRouter.select(testSignal);
+  if (reactivityDemoActive) {
+    signalRouter.select(reactivityDemoSignal);
+    return;
+  }
+
+  if (licensedDemoAudio.status === "active") {
+    signalRouter.select(licensedDemoAudio);
     return;
   }
 
@@ -39,6 +47,9 @@ function handleCaptureAction(): void {
     return;
   }
 
+  reactivityDemoActive = false;
+  licensedDemoAudio.stop();
+  sourceDock.renderReactivityDemoStatus(reactivityDemoActive);
   void displaySignal.start().catch(() => {
     // DisplayAudioSignal owns the user-facing error state.
   });
@@ -57,16 +68,36 @@ function handleSpotifyAction(): void {
   });
 }
 
-function handleTestAction(): void {
-  testActive = !testActive;
+function handleReactivityDemoAction(): void {
+  reactivityDemoActive = !reactivityDemoActive;
+  if (reactivityDemoActive) {
+    reactivityDemoSignal.reset();
+    displaySignal.stop();
+    licensedDemoAudio.stop();
+  }
   updateSignalRoute();
-  sourceDock.renderTestStatus(testActive);
+  sourceDock.renderReactivityDemoStatus(reactivityDemoActive);
+}
+
+function handleLicensedDemoAudioAction(): void {
+  if (licensedDemoAudio.status === "active") {
+    licensedDemoAudio.stop();
+    return;
+  }
+
+  reactivityDemoActive = false;
+  displaySignal.stop();
+  sourceDock.renderReactivityDemoStatus(reactivityDemoActive);
+  void licensedDemoAudio.start().catch(() => {
+    // LicensedDemoAudioSignal owns the user-facing error state.
+  });
 }
 
 const sourceDock = new SourceDock({
   container,
   onCaptureAction: handleCaptureAction,
-  onTestAction: handleTestAction,
+  onReactivityDemoAction: handleReactivityDemoAction,
+  onLicensedDemoAudioAction: handleLicensedDemoAudioAction,
   onSpotifyAction: handleSpotifyAction,
 });
 
@@ -74,17 +105,29 @@ const unsubscribeDisplaySignal = displaySignal.subscribe((source) => {
   updateSignalRoute();
   sourceDock.renderCaptureStatus(source.status, source.label);
 });
+const unsubscribeLicensedDemoAudio = licensedDemoAudio.subscribe((source) => {
+  updateSignalRoute();
+  sourceDock.renderLicensedDemoAudioStatus(source.status, source.label, source.config);
+});
 
 const controller = new FaltoneController({
   signal: signalRouter,
   renderer: world,
   onMusicFrame: (music) => {
-    sourceDock.renderSignalLevel(music.intensity, testActive || displaySignal.status === "active");
+    sourceDock.renderSignalLevel(
+      music.intensity,
+      reactivityDemoActive || licensedDemoAudio.status === "active" || displaySignal.status === "active",
+    );
   },
 });
 
 sourceDock.renderCaptureStatus(displaySignal.status, displaySignal.label);
-sourceDock.renderTestStatus(testActive);
+sourceDock.renderReactivityDemoStatus(reactivityDemoActive);
+sourceDock.renderLicensedDemoAudioStatus(
+  licensedDemoAudio.status,
+  licensedDemoAudio.label,
+  licensedDemoAudio.config,
+);
 sourceDock.renderSpotifyStatus(spotify.status());
 void spotify.handleCallback()
   .then((handled) => {
@@ -101,7 +144,9 @@ function resize(): void {
 function dispose(): void {
   window.removeEventListener("resize", resize);
   unsubscribeDisplaySignal();
+  unsubscribeLicensedDemoAudio();
   displaySignal.stop();
+  licensedDemoAudio.stop();
   sourceDock.dispose();
   controller.dispose();
 }

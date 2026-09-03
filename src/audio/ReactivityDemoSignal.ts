@@ -5,11 +5,8 @@ const ACTIVE_SECONDS = 2.4;
 const CYCLE_SECONDS = 4;
 const BEAT_SECONDS = 60 / 180;
 
-/**
- * A deliberate A/B source for exposing the complete bounded visual response.
- * It alternates full music energy with silence instead of pretending to be a song.
- */
-export class ReactivityTestSignal implements MusicSignal {
+/** A deliberate A/B demo that alternates a capped response with silence. */
+export class ReactivityDemoSignal implements MusicSignal {
   private startedAt: number | null = null;
   private previousBeat = -1;
   private readonly frame: MutableMusicFrame = createEmptyFrame();
@@ -28,7 +25,6 @@ export class ReactivityTestSignal implements MusicSignal {
 
     const beat = Math.floor(cycleTime / BEAT_SECONDS);
     const onset = beat !== this.previousBeat;
-    this.previousBeat = beat;
     this.frame.intensity = 1;
     this.frame.transient = onset ? 1 : 0;
     this.frame.onset = onset;
@@ -38,6 +34,7 @@ export class ReactivityTestSignal implements MusicSignal {
     this.frame.high = 1;
     this.frame.balance = Math.sin(elapsed * Math.PI * 0.7);
     this.frame.width = 1;
+    this.previousBeat = beat;
     return this.frame;
   }
 

@@ -26,6 +26,16 @@ export interface ReactivityState {
   readonly wakeEnergy: number;
   /** Remaining recovery time so one onset cannot repeatedly fire a wake. */
   readonly onsetCooldown?: number;
+  /** Low-pass state for spatial responses; optional for backwards-safe callers. */
+  readonly soundstagePresence?: number;
+  readonly dustPresence?: number;
+  readonly currentPresence?: number;
+  readonly gravityWeight?: number;
+  readonly lateralPull?: number;
+  readonly transientPulse?: number;
+  /** Full-field material pressure is smoothed separately from a local onset. */
+  readonly chromaBoost?: number;
+  readonly lightGain?: number;
 }
 
 /** Deterministic world values derived for one rendered frame. */

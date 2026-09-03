@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ReactivityTestSignal } from "../../src/audio/ReactivityTestSignal";
+import { ReactivityDemoSignal } from "../../src/audio/ReactivityDemoSignal";
 
-describe("reactivity test signal", () => {
+describe("reactivity demo signal", () => {
   it("alternates the full capped music envelope with a quiet comparison window", () => {
-    const signal = new ReactivityTestSignal();
+    const signal = new ReactivityDemoSignal();
 
     const first = { ...signal.sample(10) };
     const sustained = { ...signal.sample(10.2) };
@@ -35,7 +35,7 @@ describe("reactivity test signal", () => {
   });
 
   it("restarts its comparison cycle when reset", () => {
-    const signal = new ReactivityTestSignal();
+    const signal = new ReactivityDemoSignal();
 
     signal.sample(4);
     signal.sample(6.8);

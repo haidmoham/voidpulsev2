@@ -90,7 +90,7 @@ export class DisplayAudioSignal implements MusicSignal {
       stream.getTracks().forEach((track) => track.stop());
       this.setState(
         "error",
-        "No audio track arrived. Choose Spotify Web Player under Chrome Tab and enable Share tab audio; app windows may be video-only.",
+        "No audio track arrived. Choose a browser tab and enable Share tab audio; app windows may be video-only.",
       );
       throw new Error(this.label);
     }
@@ -98,7 +98,7 @@ export class DisplayAudioSignal implements MusicSignal {
     const audioTrack = audioTracks[0];
     if (!audioTrack || audioTrack.readyState !== "live") {
       stream.getTracks().forEach((track) => track.stop());
-      this.setState("error", "The shared audio track ended before analysis could start. Rebind the Spotify Web Player tab.");
+      this.setState("error", "The shared audio track ended before analysis could start. Choose the playing browser tab again.");
       throw new Error(this.label);
     }
 
