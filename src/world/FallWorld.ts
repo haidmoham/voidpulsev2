@@ -1,6 +1,11 @@
 import * as THREE from "three";
-import { FALL_LOOP_DEPTH, type WorldFrame } from "../core";
+import { FALL_LOOP_DEPTH, REACTIVITY_DEFAULTS, type WorldFrame } from "../core";
 import { spatialFallDepth, spatialMotionScale } from "./motion-preference";
+import {
+  polygonDanceScale,
+  polygonVoice,
+  type PolygonDanceSeed,
+} from "./polygon-motion";
 import { WORLD_VISUAL_PALETTE } from "./visualPalette";
 import { pigmentCoverage } from "./pigment-projection";
 import {
@@ -13,12 +18,9 @@ import {
   SHARD_COUNT,
 } from "./worldGeometry";
 
-interface LandmarkSeed {
-  readonly x: number;
+interface LandmarkSeed extends PolygonDanceSeed {
   readonly depth: number;
-  readonly z: number;
   readonly scale: number;
-  readonly phase: number;
   /** Keeps the large, structural anchors quieter than the low-mass field. */
   readonly wakeWeight: number;
 }
@@ -330,6 +332,9 @@ export class FallWorld {
         z: Math.sin(angle) * radius,
         scale,
         phase: Math.random() * Math.PI * 2,
+        voice: polygonVoice(index),
+        beatPolarity: index % 4 === 0 ? -1 as const : 1 as const,
+        playfulness: structuralAnchor ? 0.72 : 1,
         wakeWeight: structuralAnchor ? 0.12 : 0.34,
       };
       this.landmarkSeeds.push(seed);
@@ -349,6 +354,9 @@ export class FallWorld {
         z: Math.sin(angle) * (4.6 + index % 5 * 2.65),
         scale,
         phase: index * 0.61,
+        voice: polygonVoice(index + 1),
+        beatPolarity: index % 3 === 0 ? -1 as const : 1 as const,
+        playfulness: 1.18,
         wakeWeight: 0.72,
         pigmentOffset: (index * 3 + 1) % this.eventPigmentColors.length,
       };
@@ -399,6 +407,17 @@ export class FallWorld {
     const spatialTime = timeSeconds * motionScale;
     const spatialLateralPull = lateralPull * motionScale;
     const spatialSoundstageScale = 1 + (soundstageScale - 1) * motionScale;
+    const polygonDanceFrame = {
+      timeSeconds: spatialTime,
+      motionScale,
+      low: gravityWeight / REACTIVITY_DEFAULTS.lowGravityWeightMax,
+      mid: currentPresence / REACTIVITY_DEFAULTS.midCurrentPresenceMax,
+      high: dustPresence / REACTIVITY_DEFAULTS.highDustPresenceMax,
+      transient: transientPulse,
+      width: (soundstageScale - 1) / REACTIVITY_DEFAULTS.widthExpansionMax,
+      pan: lateralPull /
+        (REACTIVITY_DEFAULTS.balanceBasePull + REACTIVITY_DEFAULTS.balanceWidthPull),
+    };
 
     this.backgroundColor.lerpColors(this.voidColor, this.plumColor, 0.28 + weather * 0.42);
     this.backgroundColor.lerp(this.fruitColor, chromaBoost * 0.1);
@@ -488,9 +507,11 @@ export class FallWorld {
       const relativeDepth = (seed.depth - spatialDepth + FALL_LOOP_DEPTH) % FALL_LOOP_DEPTH;
       const wakeDistance = (relativeDepth - 18) / 9;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
-      const peripheralBreath = Math.sin(spatialTime * 0.18 + seed.phase) *
-        0.018 * weather * motionScale;
-      const scale = seed.scale * (1 + peripheralBreath + localWake * seed.wakeWeight * motionScale);
+      const scale = seed.scale * polygonDanceScale(
+        seed,
+        polygonDanceFrame,
+        localWake * seed.wakeWeight,
+      );
 
       this.matrix.makeScale(scale, scale, scale);
       this.matrix.setPosition(seed.x, -spatialDepth - relativeDepth, seed.z);
@@ -509,9 +530,10 @@ export class FallWorld {
       const relativeDepth = (seed.depth - spatialDepth + FALL_LOOP_DEPTH) % FALL_LOOP_DEPTH;
       const wakeDistance = (relativeDepth - 16) / 7.4;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
-      const asymmetricPulse = Math.sin(spatialTime * 0.24 + seed.phase) * 0.045 * motionScale;
-      const scale = seed.scale * (
-        1 + asymmetricPulse + (chromaBoost * 0.14 + localWake * 1.34) * motionScale
+      const scale = seed.scale * polygonDanceScale(
+        seed,
+        polygonDanceFrame,
+        localWake * seed.wakeWeight,
       );
       this.matrix.makeScale(scale, scale, scale);
       this.matrix.setPosition(
