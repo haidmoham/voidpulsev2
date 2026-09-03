@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FALL_LOOP_DEPTH, type WorldFrame } from "../core";
+import { spatialFallDepth, spatialMotionScale } from "./motion-preference";
 import { WORLD_VISUAL_PALETTE } from "./visualPalette";
 import { pigmentCoverage } from "./pigment-projection";
 import {
@@ -379,7 +380,6 @@ export class FallWorld {
     const { reactivity, timeSeconds } = frame;
     const {
       breath,
-      cameraDepth,
       chromaBoost,
       currentPresence,
       dustPresence,
@@ -394,10 +394,11 @@ export class FallWorld {
       weather,
     } = reactivity;
     const reducedMotion = this.reducedMotionQuery.matches;
-    const spatialDepth = reducedMotion ? 0 : cameraDepth;
-    const spatialTime = reducedMotion ? 0 : timeSeconds;
-    const spatialLateralPull = reducedMotion ? 0 : lateralPull;
-    const spatialSoundstageScale = reducedMotion ? 1 : soundstageScale;
+    const motionScale = spatialMotionScale(reducedMotion);
+    const spatialDepth = spatialFallDepth(frame.fall.distance, reducedMotion);
+    const spatialTime = timeSeconds * motionScale;
+    const spatialLateralPull = lateralPull * motionScale;
+    const spatialSoundstageScale = 1 + (soundstageScale - 1) * motionScale;
 
     this.backgroundColor.lerpColors(this.voidColor, this.plumColor, 0.28 + weather * 0.42);
     this.backgroundColor.lerp(this.fruitColor, chromaBoost * 0.1);
@@ -421,9 +422,9 @@ export class FallWorld {
       );
       field.material.opacity = Math.min(1, (field.baseOpacity + chromaBoost * 0.36 +
         lightGain * 0.05 + transientPulse * 0.08 + localWake * 0.25) * coverage);
-      const expansion = reducedMotion
-        ? 1
-        : 1 + breath * 0.08 + chromaBoost * 0.48 + transientPulse * 0.2 + localWake * 1.1;
+      const expansion = 1 + (
+        breath * 0.08 + chromaBoost * 0.48 + transientPulse * 0.2 + localWake * 1.1
+      ) * motionScale;
       field.sprite.position.set(
         field.x + spatialLateralPull * (0.14 + Math.abs(Math.sin(field.phase)) * 0.22),
         -spatialDepth - relativeDepth,
@@ -441,9 +442,7 @@ export class FallWorld {
     this.dust.scale.set(spatialSoundstageScale, 1, spatialSoundstageScale);
     this.dustReplica.scale.copy(this.dust.scale);
     this.dustMaterial.opacity = 0.17 + weather * 0.1 + dustPresence * 0.72 + transientPulse * 0.13;
-    this.dustMaterial.size = reducedMotion
-      ? 0.052
-      : 0.052 + dustPresence * 0.075 + transientPulse * 0.034;
+    this.dustMaterial.size = 0.052 + (dustPresence * 0.075 + transientPulse * 0.034) * motionScale;
     this.dustMaterial.color.lerpColors(this.coolColor, this.ivoryColor, 0.22 + chromaBoost * 0.3);
     this.dustMaterial.color.lerp(this.fruitColor, transientPulse * 0.22);
     this.shardMaterial.opacity = 0.18 + chromaBoost * 0.62 + transientPulse * 0.18;
@@ -470,10 +469,8 @@ export class FallWorld {
       aperture.mesh.position.y = -spatialDepth - relativeDepth;
       const wakeDistance = (relativeDepth - 14) / 11;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
-      const slowPulse = reducedMotion
-        ? 1
-        : 1 + Math.sin(spatialTime * 0.13 + aperture.phase) * 0.075;
-      const wakeScale = reducedMotion ? 1 : 1 + localWake * 0.82 + transientPulse * 0.12;
+      const slowPulse = 1 + Math.sin(spatialTime * 0.13 + aperture.phase) * 0.075 * motionScale;
+      const wakeScale = 1 + (localWake * 0.82 + transientPulse * 0.12) * motionScale;
       aperture.mesh.scale.set(
         aperture.xScale * slowPulse * wakeScale,
         aperture.zScale * slowPulse * wakeScale,
@@ -491,10 +488,9 @@ export class FallWorld {
       const relativeDepth = (seed.depth - spatialDepth + FALL_LOOP_DEPTH) % FALL_LOOP_DEPTH;
       const wakeDistance = (relativeDepth - 18) / 9;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
-      const peripheralBreath = reducedMotion
-        ? 0
-        : Math.sin(spatialTime * 0.18 + seed.phase) * 0.018 * weather;
-      const scale = seed.scale * (1 + peripheralBreath + (reducedMotion ? 0 : localWake * seed.wakeWeight));
+      const peripheralBreath = Math.sin(spatialTime * 0.18 + seed.phase) *
+        0.018 * weather * motionScale;
+      const scale = seed.scale * (1 + peripheralBreath + localWake * seed.wakeWeight * motionScale);
 
       this.matrix.makeScale(scale, scale, scale);
       this.matrix.setPosition(seed.x, -spatialDepth - relativeDepth, seed.z);
@@ -513,13 +509,14 @@ export class FallWorld {
       const relativeDepth = (seed.depth - spatialDepth + FALL_LOOP_DEPTH) % FALL_LOOP_DEPTH;
       const wakeDistance = (relativeDepth - 16) / 7.4;
       const localWake = Math.exp(-0.5 * wakeDistance * wakeDistance) * wakeEnergy;
-      const asymmetricPulse = reducedMotion ? 0 : Math.sin(spatialTime * 0.24 + seed.phase) * 0.045;
-      const scale = seed.scale * (reducedMotion
-        ? 1
-        : 1 + asymmetricPulse + chromaBoost * 0.14 + localWake * 1.34);
+      const asymmetricPulse = Math.sin(spatialTime * 0.24 + seed.phase) * 0.045 * motionScale;
+      const scale = seed.scale * (
+        1 + asymmetricPulse + (chromaBoost * 0.14 + localWake * 1.34) * motionScale
+      );
       this.matrix.makeScale(scale, scale, scale);
       this.matrix.setPosition(
-        seed.x + (reducedMotion ? 0 : Math.sin(spatialTime * 0.08 + seed.phase) * (0.2 + chromaBoost * 0.9)),
+        seed.x + Math.sin(spatialTime * 0.08 + seed.phase) *
+          (0.2 + chromaBoost * 0.9) * motionScale,
         -spatialDepth - relativeDepth,
         seed.z,
       );
@@ -537,17 +534,17 @@ export class FallWorld {
 
     const currentPhase = spatialTime * 0.038;
     const cameraLateralPull = THREE.MathUtils.clamp(spatialLateralPull, -6, 6) * 0.45;
-    const cameraTransient = reducedMotion ? 0 : THREE.MathUtils.clamp(transientPulse, 0, 1);
-    const currentStrength = reducedMotion ? 0 : 0.48 + currentPresence * 0.86 + cameraTransient * 0.34;
+    const cameraTransient = THREE.MathUtils.clamp(transientPulse, 0, 1) * motionScale;
+    const currentStrength = (0.48 + currentPresence * 0.86 + cameraTransient * 0.34) * motionScale;
     this.camera.position.y = -spatialDepth;
     this.camera.position.x = Math.sin(currentPhase) * currentStrength
-      + Math.sin(spatialTime * 0.11) * (reducedMotion ? 0 : 0.1 + chromaBoost * 0.34)
+      + Math.sin(spatialTime * 0.11) * (0.1 + chromaBoost * 0.34) * motionScale
       + cameraLateralPull;
     this.camera.position.z = Math.cos(currentPhase * 0.73 + 0.8) * currentStrength
-      + Math.sin(spatialTime * 0.18) * (reducedMotion ? 0 : currentPresence * 0.54);
-    this.camera.rotation.z = Math.sin(spatialTime * 0.16) * (reducedMotion ? 0 : 0.028)
+      + Math.sin(spatialTime * 0.18) * currentPresence * 0.54 * motionScale;
+    this.camera.rotation.z = Math.sin(spatialTime * 0.16) * 0.028 * motionScale
       + cameraLateralPull * 0.007 + cameraTransient * 0.024;
-    const nextFov = reducedMotion ? 68 : 68 - gravityWeight * 3.5 - cameraTransient * 1.25;
+    const nextFov = 68 - (gravityWeight * 3.5 + cameraTransient * 1.25) * motionScale;
     if (Math.abs(nextFov - this.cameraFov) > 0.01) {
       this.camera.fov = nextFov;
       this.cameraFov = nextFov;
@@ -555,10 +552,10 @@ export class FallWorld {
     }
 
     this.gravityWell.position.set(cameraLateralPull * -0.18, -spatialDepth - 78, 0);
-    this.gravityWell.rotation.y = reducedMotion ? 0 : spatialTime * 0.03 + chromaBoost * 0.3;
-    this.gravityWell.scale.setScalar(reducedMotion
-      ? 0.94
-      : 0.94 + gravityWeight * 0.92 + cameraTransient * 0.24);
+    this.gravityWell.rotation.y = spatialTime * 0.03 + chromaBoost * 0.3 * motionScale;
+    this.gravityWell.scale.setScalar(
+      0.94 + (gravityWeight * 0.92 + cameraTransient * 0.24) * motionScale,
+    );
     this.gravityOuterMaterial.opacity = 0.18 + weather * 0.13 + chromaBoost * 0.1 + wakeEnergy * 0.18;
     this.gravityOuterMaterial.color.lerpColors(this.plumColor, this.fruitColor, 0.34 + chromaBoost * 0.54);
     this.gravityInnerMaterial.opacity = 0.46 + lightGain * 0.22 + transientPulse * 0.2;
