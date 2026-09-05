@@ -32,6 +32,8 @@ export class LicensedDemoAudioSignal implements MusicSignal {
   private musicAnalyzer: MusicAnalyzer | null = null;
   private lastSampleTime: number | null = null;
   private requestId = 0;
+  private pauseRequestId = 0;
+  private isPaused = false;
   private listeners = new Set<(signal: LicensedDemoAudioSignal) => void>();
 
   constructor(readonly config: DemoAudioConfig) {
@@ -39,6 +41,10 @@ export class LicensedDemoAudioSignal implements MusicSignal {
     this.label = config.available
       ? "Licensed sample is ready to play."
       : config.reason;
+  }
+
+  get paused(): boolean {
+    return this.isPaused;
   }
 
   subscribe(listener: (signal: LicensedDemoAudioSignal) => void): () => void {
@@ -60,6 +66,7 @@ export class LicensedDemoAudioSignal implements MusicSignal {
     audio.preload = "auto";
     audio.addEventListener("error", () => {
       if (requestId === this.requestId && this.audio === audio) {
+        this.requestId += 1;
         this.release();
         this.setState("error", "The configured sample could not play or allow local analysis. Check its URL, license, and CORS headers.");
       }
@@ -99,13 +106,17 @@ export class LicensedDemoAudioSignal implements MusicSignal {
       this.hasStereo = source.channelCount > 1;
       this.musicAnalyzer = new MusicAnalyzer();
       this.lastSampleTime = null;
-      if (context.state === "suspended") await context.resume();
+      await Promise.all([context.resume(), audio.play()]);
       if (requestId !== this.requestId) return;
-      await audio.play();
-      if (requestId !== this.requestId) return;
+      if (this.isPaused) audio.pause();
       this.setState("active", samplePlaybackLabel(this.config));
     } catch (error) {
       if (requestId !== this.requestId) return;
+      // A pause can cancel the initial play promise while retaining this source.
+      if (this.pauseRequestId > 0 && error instanceof DOMException && error.name === "AbortError") {
+        this.setState("active", samplePlaybackLabel(this.config));
+        return;
+      }
       this.release();
       this.setState("error", "The configured sample could not play or allow local analysis. Check its URL, license, and CORS headers.");
       throw new Error(this.label, { cause: error });
@@ -121,6 +132,7 @@ export class LicensedDemoAudioSignal implements MusicSignal {
     if (
       !analyser || !timeSamples || !spectrumSamples || !leftSamples || !rightSamples
       || !this.musicAnalyzer || !this.leftAnalyser || !this.rightAnalyser || this.status !== "active"
+      || this.isPaused
     ) return SILENT_MUSIC_FRAME;
 
     analyser.getFloatTimeDomainData(timeSamples);
@@ -145,12 +157,32 @@ export class LicensedDemoAudioSignal implements MusicSignal {
     this.requestId += 1;
     const wasPlaying = this.audio !== null || this.context !== null;
     this.release();
-    if (wasPlaying && this.config.available) this.setState("idle", "Licensed sample stopped. The ambient procedural current is active again.");
+    if ((wasPlaying || this.status === "error") && this.config.available) this.setState("idle", "sample stopped");
   }
 
   reset(): void {
     this.musicAnalyzer?.reset();
     this.lastSampleTime = null;
+  }
+
+  setPaused(paused: boolean): void {
+    const audio = this.audio;
+    const context = this.context;
+    if (!audio || !context || this.isPaused === paused) return;
+    this.isPaused = paused;
+    const requestId = this.requestId;
+    const pauseRequestId = ++this.pauseRequestId;
+    this.reset();
+    if (paused) audio.pause();
+    else {
+      void Promise.all([context.resume(), audio.play()]).catch(() => {
+        if (requestId !== this.requestId || pauseRequestId !== this.pauseRequestId || this.audio !== audio) return;
+        this.requestId += 1;
+        this.release();
+        this.setState("error", "the configured sample could not resume. try playing it again.");
+      });
+    }
+    this.listeners.forEach((listener) => listener(this));
   }
 
   private release(): void {
@@ -161,6 +193,8 @@ export class LicensedDemoAudioSignal implements MusicSignal {
     const leftAnalyser = this.leftAnalyser;
     const rightAnalyser = this.rightAnalyser;
     this.audio = null;
+    this.isPaused = false;
+    this.pauseRequestId = 0;
     this.context = null;
     this.source = null;
     this.analyser = null;
