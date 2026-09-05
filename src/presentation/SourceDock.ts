@@ -1,6 +1,7 @@
 import type { DemoAudioConfig } from "../audio/DemoAudioConfig";
 import type { DisplayAudioState } from "../audio/DisplayAudioSignal";
 import type { LicensedDemoAudioState } from "../audio/LicensedDemoAudioSignal";
+import type { MusicFrame } from "../core";
 import type { SpotifyAuthStatus } from "../spotify/SpotifyAuth";
 
 export interface SourceDockOptions {
@@ -9,299 +10,345 @@ export interface SourceDockOptions {
   onReactivityDemoAction: () => void;
   onLicensedDemoAudioAction: () => void;
   onSpotifyAction: () => void;
+  onFileAction: () => void;
+  onAmbientAction: () => void;
+  onPauseAction: () => void;
+  onMotionAction: () => void;
+  onFocusAction: () => void;
+  onFullscreenAction: () => void;
+  onSeek: (fraction: number) => void;
 }
 
-/** The presentational controls and status readout for the selected music source. */
+const ICONS = {
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  play: '<path d="m8 5 11 7-11 7Z"/>',
+  focus: '<path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>',
+  expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6"/>',
+  file: '<path d="M12 16V4m-4 4 4-4 4 4M5 14v6h14v-6"/>',
+  settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--ink)"/><circle cx="15" cy="17" r="3" fill="var(--ink)"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+} as const;
+
+function icon(path: string): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+
+/** Owns presentation state; callbacks delegate audio and renderer changes to main. */
 export class SourceDock {
-  private readonly sourceDock = document.createElement("aside");
-  private readonly sourceName = document.createElement("strong");
-  private readonly sourceDetail = document.createElement("span");
-  private readonly sourceMeter = document.createElement("span");
-  private readonly sourceMeterFill = document.createElement("span");
-  private readonly captureButton = document.createElement("button");
-  private readonly reactivityDemoButton = document.createElement("button");
-  private readonly licensedDemoAudioButton = document.createElement("button");
-  private readonly spotifyButton = document.createElement("button");
-  private readonly captureOption = document.createElement("section");
-  private readonly reactivityDemoOption = document.createElement("section");
-  private readonly licensedDemoAudioOption = document.createElement("section");
-  private readonly spotifyOption = document.createElement("section");
-  private readonly onCaptureAction: () => void;
-  private readonly onReactivityDemoAction: () => void;
-  private readonly onLicensedDemoAudioAction: () => void;
-  private readonly onSpotifyAction: () => void;
+  private readonly shell = document.createElement("div");
+  private readonly sourceName: HTMLElement;
+  private readonly sourceDetail: HTMLElement;
+  private readonly sourceDock: HTMLElement;
+  private readonly chooser: HTMLElement;
+  private readonly chooserButton: HTMLButtonElement;
+  private readonly pauseButton: HTMLButtonElement;
+  private readonly focusButton: HTMLButtonElement;
+  private readonly fullscreenButton: HTMLButtonElement;
+  private readonly captureButton: HTMLButtonElement;
+  private readonly demoButton: HTMLButtonElement;
+  private readonly sampleButton: HTMLButtonElement;
+  private readonly spotifyButton: HTMLButtonElement;
+  private readonly spotifyDisclosure: HTMLElement;
+  private readonly progress: HTMLInputElement;
+  private readonly progressTime: HTMLElement;
+  private readonly progressEnd: HTMLElement;
+  private readonly progressRow: HTMLElement;
+  private readonly about: HTMLDialogElement;
+  private readonly meter: HTMLElement;
+  private readonly events = new AbortController();
   private captureStatus: DisplayAudioState = "idle";
-  private captureLabel = "Choose a tab with audio";
-  private reactivityDemoActive = false;
-  private licensedDemoAudioStatus: LicensedDemoAudioState = "unavailable";
-  private licensedDemoAudioLabel = "";
-  private licensedDemoAudioConfig: DemoAudioConfig | null = null;
+  private captureLabel = "";
+  private demoActive = false;
+  private sampleStatus: LicensedDemoAudioState = "unavailable";
+  private sampleLabel = "";
+  private sampleConfig: DemoAudioConfig | null = null;
+  private localStatus: "idle" | "starting" | "active" | "error" = "idle";
+  private localLabel = "";
+  private lastProgressSecond = -1;
+  private lastSignalLevel = -1;
+  private progressDuration = 0;
 
-  constructor({
-    container,
-    onCaptureAction,
-    onReactivityDemoAction,
-    onLicensedDemoAudioAction,
-    onSpotifyAction,
-  }: SourceDockOptions) {
-    this.onCaptureAction = onCaptureAction;
-    this.onReactivityDemoAction = onReactivityDemoAction;
-    this.onLicensedDemoAudioAction = onLicensedDemoAudioAction;
-    this.onSpotifyAction = onSpotifyAction;
+  constructor(options: SourceDockOptions) {
+    this.shell.className = "experience-ui";
+    // This template contains authored copy only. Source metadata uses textContent below.
+    this.shell.innerHTML = `
+      <header class="site-header">
+        <span class="brand-mark" role="img" aria-label="faltone"><i></i><i></i><i></i></span>
+        <nav aria-label="experience"><button class="icon-button about-trigger" type="button" aria-label="settings" title="settings">${icon(ICONS.settings)}</button><button class="icon-button fullscreen-action" type="button" aria-label="enter fullscreen" title="fullscreen (f)">${icon(ICONS.expand)}</button></nav>
+      </header>
+      <aside class="source-dock" aria-label="music source controls">
+        <section class="source-chooser" id="source-chooser" aria-label="choose a source" hidden>
+          <button class="icon-button chooser-close" type="button" aria-label="close source chooser">${icon(ICONS.close)}</button>
+          <button class="source-option local-option" type="button"><strong>open file</strong><span aria-hidden="true">↗</span></button>
+          <button class="source-option capture-option" type="button"><strong>tab audio</strong><span aria-hidden="true">↗</span></button>
+          <button class="source-option demo-option" type="button"><strong>visual demo</strong><span aria-hidden="true">↗</span></button>
+          <button class="source-option sample-option" type="button" hidden><strong>sample</strong><span aria-hidden="true">↗</span></button>
+          <button class="source-option release-action" type="button" hidden><strong>release source</strong><span aria-hidden="true">↙</span></button>
+          <details class="spotify-disclosure" hidden><summary>spotify account</summary><button class="text-button spotify-action" type="button">connect account</button></details>
+        </section>
+        <div class="dock-main">
+          <span class="signal-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <button class="source-select" type="button" aria-expanded="false" aria-controls="source-chooser" aria-label="choose music source"><strong class="source-name">ambient</strong><span class="source-chevron" aria-hidden="true">⌃</span></button>
+          <button class="icon-button file-action" type="button" aria-label="open audio file" title="open file (o)">${icon(ICONS.file)}</button>
+          <button class="icon-button pause-action" type="button" aria-label="pause" title="pause (space)">${icon(ICONS.pause)}</button>
+          <button class="icon-button focus-action" type="button" aria-label="enter focus mode" title="focus (h)">${icon(ICONS.focus)}</button>
+        </div>
+        <div class="track-progress" hidden><span class="progress-time">0:00</span><input class="progress-input" type="range" min="0" max="1000" value="0" aria-label="seek in track"><span class="progress-end">0:00</span></div>
+        <p class="source-detail" role="status" aria-live="polite" hidden></p>
+      </aside>
+      <button class="focus-exit icon-button" type="button" aria-label="leave focus mode" title="leave focus (h)">${icon(ICONS.focus)}</button>
+      <dialog class="about-dialog" aria-label="settings">
+        <button class="icon-button about-close" type="button" aria-label="close settings">${icon(ICONS.close)}</button>
+        <button class="text-button motion-action" type="button" aria-pressed="false">motion on</button>
+        <div class="keyboard-help"><span><kbd>space</kbd>pause</span><span><kbd>o</kbd>open</span><span><kbd>h</kbd>focus</span><span><kbd>f</kbd>fullscreen</span><span><kbd>m</kbd>motion</span></div>
+      </dialog>`;
+    options.container.append(this.shell);
+    this.sourceDock = this.find(".source-dock");
+    this.sourceName = this.find(".source-name");
+    this.sourceDetail = this.find(".source-detail");
+    this.chooser = this.find(".source-chooser");
+    this.chooserButton = this.find<HTMLButtonElement>(".source-select");
+    this.pauseButton = this.find<HTMLButtonElement>(".pause-action");
+    this.focusButton = this.find<HTMLButtonElement>(".focus-action");
+    this.fullscreenButton = this.find<HTMLButtonElement>(".fullscreen-action");
+    this.captureButton = this.find<HTMLButtonElement>(".capture-option");
+    this.demoButton = this.find<HTMLButtonElement>(".demo-option");
+    this.sampleButton = this.find<HTMLButtonElement>(".sample-option");
+    this.spotifyButton = this.find<HTMLButtonElement>(".spotify-action");
+    this.spotifyDisclosure = this.find(".spotify-disclosure");
+    this.progress = this.find<HTMLInputElement>(".progress-input");
+    this.progressTime = this.find(".progress-time");
+    this.progressEnd = this.find(".progress-end");
+    this.progressRow = this.find(".track-progress");
+    this.about = this.find<HTMLDialogElement>(".about-dialog");
+    this.meter = this.find(".signal-meter");
+    const eventOptions = { signal: this.events.signal };
+    const on = (selector: string, action: () => void): void => {
+      this.find(selector).addEventListener("click", action, eventOptions);
+    };
+    on(".file-action", options.onFileAction);
+    on(".release-action", options.onAmbientAction);
+    on(".local-option", options.onFileAction);
+    on(".capture-option", options.onCaptureAction);
+    on(".demo-option", options.onReactivityDemoAction);
+    on(".sample-option", options.onLicensedDemoAudioAction);
+    on(".spotify-action", options.onSpotifyAction);
+    on(".pause-action", options.onPauseAction);
+    on(".motion-action", options.onMotionAction);
+    on(".focus-action", options.onFocusAction);
+    on(".focus-exit", options.onFocusAction);
+    on(".fullscreen-action", options.onFullscreenAction);
+    on(".source-select", () => this.setChooser(this.chooser.hidden));
+    on(".chooser-close", () => this.setChooser(false));
+    on(".about-trigger", () => this.about.showModal());
+    on(".about-close", () => this.about.close());
+    this.progress.addEventListener("input", () => {
+      const fraction = Number(this.progress.value) / 1000;
+      options.onSeek(fraction);
+      this.renderProgress(fraction * this.progressDuration, this.progressDuration);
+    }, eventOptions);
+    document.addEventListener("pointerdown", (event) => {
+      if (event.target instanceof Node && !this.sourceDock.contains(event.target)) this.setChooser(false, false);
+    }, eventOptions);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !this.chooser.hidden) this.setChooser(false);
+    }, eventOptions);
+    this.about.addEventListener("click", (event) => {
+      if (event.target === this.about) {
+        const bounds = this.about.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) this.about.close();
+      }
+    }, eventOptions);
+  }
 
-    this.sourceDock.className = "source-dock";
-    this.sourceDock.setAttribute("aria-label", "Music source controls");
+  dismissIntro(): void {
+    this.setChooser(false, false);
+  }
 
-    const sourceReadout = document.createElement("div");
-    sourceReadout.className = "source-readout";
-
-    const sourceKicker = document.createElement("span");
-    sourceKicker.className = "source-kicker";
-    sourceKicker.textContent = "visual input";
-
-    this.sourceName.className = "source-name";
-    this.sourceDetail.className = "source-detail";
-    this.sourceDetail.setAttribute("aria-live", "polite");
-    this.sourceMeter.className = "source-meter";
-    this.sourceMeter.setAttribute("aria-hidden", "true");
-    this.sourceMeterFill.className = "source-meter-fill";
-    this.sourceMeter.append(this.sourceMeterFill);
-    sourceReadout.append(sourceKicker, this.sourceName, this.sourceDetail, this.sourceMeter);
-
-    const sourceActions = document.createElement("div");
-    sourceActions.className = "source-actions";
-
-    this.captureOption.className = "source-option capture-option";
-    this.captureOption.append(
-      this.createOptionCopy(
-        "Live browser-tab audio",
-      ),
-    );
-    this.captureButton.className = "source-action capture-action";
-    this.captureButton.type = "button";
-    this.captureButton.setAttribute("aria-label", "Choose a browser tab with audio");
-    this.captureButton.addEventListener("click", this.onCaptureAction);
-    this.captureOption.append(this.captureButton);
-
-    this.reactivityDemoOption.className = "source-option demo-option";
-    this.reactivityDemoOption.append(
-      this.createOptionCopy(
-        "Demo mode: 4 s full/silence",
-      ),
-    );
-    this.reactivityDemoButton.className = "source-action demo-action";
-    this.reactivityDemoButton.type = "button";
-    this.reactivityDemoButton.textContent = "start demo";
-    this.reactivityDemoButton.setAttribute("aria-label", "Start the deterministic reactivity demo");
-    this.reactivityDemoButton.addEventListener("click", this.onReactivityDemoAction);
-    this.reactivityDemoOption.append(this.reactivityDemoButton);
-
-    this.licensedDemoAudioOption.className = "source-option licensed-demo-option";
-    this.licensedDemoAudioOption.append(this.createOptionCopy("Optional licensed audio sample"));
-    this.licensedDemoAudioButton.className = "source-action licensed-demo-action";
-    this.licensedDemoAudioButton.type = "button";
-    this.licensedDemoAudioButton.addEventListener("click", this.onLicensedDemoAudioAction);
-    this.licensedDemoAudioOption.append(this.licensedDemoAudioButton);
-
-    this.spotifyOption.className = "source-option spotify-option";
-    this.spotifyOption.append(
-      this.createOptionCopy(
-        "Spotify: account authorization",
-      ),
-    );
-    this.spotifyButton.className = "source-action spotify-auth";
-    this.spotifyButton.type = "button";
-    this.spotifyButton.setAttribute("aria-label", "Authorize a Spotify account");
-    this.spotifyButton.addEventListener("click", this.onSpotifyAction);
-    this.spotifyOption.append(this.spotifyButton);
-
-    sourceActions.append(
-      this.captureOption,
-      this.reactivityDemoOption,
-      this.licensedDemoAudioOption,
-      this.spotifyOption,
-    );
-
-    const sourceNotes = document.createElement("details");
-    sourceNotes.className = "source-notes";
-    const sourceNotesSummary = document.createElement("summary");
-    sourceNotesSummary.textContent = "What each source does";
-    const sourceNoteList = document.createElement("div");
-    sourceNoteList.className = "source-note-list";
-    sourceNoteList.append(
-      this.createSourceNote(
-        "Live browser-tab audio",
-        "Choose a playing tab and enable Share audio. Analysis stays local and is never replayed or uploaded.",
-      ),
-      this.createSourceNote(
-        "Demo mode",
-        "A deterministic full capped response and silence alternate every 4 seconds. It is not a song.",
-      ),
-      this.createSourceNote(
-        "Optional licensed sample",
-        "Set VITE_DEMO_AUDIO_URL to a rights-cleared, CORS-enabled audio URL. Add its title, credit, and license metadata only when known; the sample is never labeled as an artist or track by default.",
-      ),
-      this.createSourceNote(
-        "Spotify authorization",
-        "Connects an account only. It does not supply, play, or capture audio.",
-      ),
-    );
-    sourceNotes.append(sourceNotesSummary, sourceNoteList);
-
-    this.sourceDock.append(sourceReadout, sourceActions, sourceNotes);
-    container.append(this.sourceDock);
+  showIntro(): void {
+    this.setChooser(true);
   }
 
   renderCaptureStatus(status: DisplayAudioState, label: string): void {
     this.captureStatus = status;
     this.captureLabel = label;
+    this.captureButton.disabled = status === "starting";
+    this.optionTitle(this.captureButton, status === "active" ? "release tab audio" : status === "starting" ? "connecting…" : "tab audio");
+    this.activateSource(status === "active");
     this.renderSourceStatus();
   }
 
   renderReactivityDemoStatus(active: boolean): void {
-    this.reactivityDemoActive = active;
-    this.reactivityDemoOption.dataset.active = String(active);
-    this.reactivityDemoButton.dataset.status = active ? "active" : "idle";
-    this.reactivityDemoButton.textContent = active ? "stop demo" : "start demo";
-    this.reactivityDemoButton.setAttribute(
-      "aria-label",
-      active
-        ? "Stop the deterministic reactivity demo"
-        : "Start the deterministic reactivity demo",
-    );
+    this.demoActive = active;
+    this.optionTitle(this.demoButton, active ? "stop demo" : "visual demo");
+    this.activateSource(active);
     this.renderSourceStatus();
   }
 
-  renderLicensedDemoAudioStatus(
-    status: LicensedDemoAudioState,
-    label: string,
-    config: DemoAudioConfig,
-  ): void {
-    this.licensedDemoAudioStatus = status;
-    this.licensedDemoAudioLabel = label;
-    this.licensedDemoAudioConfig = config;
-    this.licensedDemoAudioOption.dataset.status = status;
-    this.licensedDemoAudioOption.dataset.active = String(status === "active");
-    this.licensedDemoAudioButton.dataset.status = status;
-    this.licensedDemoAudioButton.disabled = status === "unavailable" || status === "starting";
-    this.licensedDemoAudioButton.textContent = ({
-      unavailable: "sample unavailable",
-      idle: "play sample",
-      starting: "starting…",
-      active: "stop sample",
-      error: "retry sample",
-    } satisfies Record<LicensedDemoAudioState, string>)[status];
-    this.licensedDemoAudioButton.setAttribute(
-      "aria-label",
-      status === "unavailable"
-        ? "Licensed sample unavailable: configure VITE_DEMO_AUDIO_URL"
-        : status === "active"
-          ? "Stop the configured licensed sample"
-          : "Play the configured licensed sample",
-    );
+  renderLocalAudioStatus(status: "idle" | "starting" | "active" | "error", label: string): void {
+    this.localStatus = status;
+    this.localLabel = label;
+    this.activateSource(status === "active");
     this.renderSourceStatus();
   }
 
-  private renderSourceStatus(): void {
-    const status = this.captureStatus;
-    const isActive = status === "active";
-    this.sourceDock.dataset.status = this.reactivityDemoActive
-      ? "demo"
-      : this.licensedDemoAudioStatus === "active"
-        ? "licensed-demo"
-        : status;
-    this.captureOption.dataset.active = String(isActive);
-    this.captureButton.dataset.status = status;
-    this.captureButton.disabled = status === "starting";
-    this.captureButton.textContent = isActive ? "release tab" : "choose tab";
-
-    if (this.reactivityDemoActive) {
-      this.sourceName.textContent = "demo mode";
-      this.sourceDetail.textContent = "Full capped response, then silence. This procedural comparison repeats every four seconds; no song is playing.";
-      return;
-    }
-
-    if (this.licensedDemoAudioStatus === "active") {
-      this.sourceName.textContent = this.licensedDemoAudioConfig?.available && this.licensedDemoAudioConfig.title
-        ? `licensed sample: ${this.licensedDemoAudioConfig.title}`
-        : "licensed demo sample";
-      this.sourceDetail.textContent = this.licensedDemoAudioLabel;
-      return;
-    }
-
-    if (this.licensedDemoAudioStatus === "error") {
-      this.sourceName.textContent = "licensed sample needs attention";
-      this.sourceDetail.textContent = this.licensedDemoAudioLabel;
-      return;
-    }
-
-    if (status === "starting") {
-      this.sourceName.textContent = "choose a browser tab";
-      this.sourceDetail.textContent = "Select the playing tab in the browser picker and enable Share audio.";
-      return;
-    }
-
-    if (isActive) {
-      this.sourceName.textContent = "live audio bound";
-      this.sourceDetail.textContent = this.captureLabel;
-      return;
-    }
-
-    if (status === "error") {
-      this.sourceName.textContent = "capture needs attention";
-      this.sourceDetail.textContent = this.captureLabel;
-      return;
-    }
-
-    this.sourceName.textContent = "ambient procedural current";
-    this.sourceDetail.textContent = "No live or licensed sample is playing; the scene is using its original in-browser procedural current.";
+  renderLicensedDemoAudioStatus(status: LicensedDemoAudioState, label: string, config: DemoAudioConfig): void {
+    this.sampleStatus = status;
+    this.sampleLabel = label;
+    this.sampleConfig = config;
+    this.sampleButton.hidden = !config.available;
+    this.sampleButton.disabled = status === "starting";
+    this.optionTitle(this.sampleButton, status === "active" ? "stop sample" : status === "starting" ? "opening sample…" : "sample");
+    this.activateSource(status === "active");
+    this.renderSourceStatus();
   }
 
   renderSpotifyStatus(status: SpotifyAuthStatus, message = ""): void {
-    this.spotifyOption.dataset.status = status;
-    this.spotifyButton.dataset.status = status;
-    this.spotifyButton.disabled = status === "connecting" || status === "unconfigured";
+    this.spotifyDisclosure.hidden = status === "unconfigured";
+    this.spotifyButton.disabled = status === "connecting";
     this.spotifyButton.textContent = message || ({
-      unconfigured: "spotify not configured",
-      disconnected: "connect spotify",
+      unconfigured: "connect account",
+      disconnected: "connect account",
       connecting: "connecting…",
-      connected: "spotify connected",
+      connected: "disconnect account",
     } satisfies Record<SpotifyAuthStatus, string>)[status];
   }
 
+  renderPaused(paused: boolean): void {
+    this.pauseButton.innerHTML = icon(paused ? ICONS.play : ICONS.pause);
+    this.pauseButton.setAttribute("aria-label", paused ? "resume" : "pause");
+    this.pauseButton.setAttribute("aria-pressed", String(paused));
+    this.pauseButton.title = `${paused ? "resume" : "pause"} (space)`;
+    this.sourceDock.dataset.paused = String(paused);
+  }
+
+  /** CSS owns visibility; inert also removes hidden controls from keyboard navigation. */
+  renderFocus(focused: boolean): void {
+    document.body.classList.toggle("is-focused", focused);
+    this.focusButton.setAttribute("aria-pressed", String(focused));
+    this.find(".site-header").inert = focused;
+    this.sourceDock.inert = focused;
+    this.find(".focus-exit").inert = !focused;
+    this.setChooser(false, false);
+    if (focused) {
+      this.about.close();
+      this.find(".focus-exit").focus();
+    } else {
+      this.focusButton.focus();
+    }
+  }
+
+  renderMotion(still: boolean): void {
+    const button = this.find<HTMLButtonElement>(".motion-action");
+    button.textContent = still ? "motion off" : "motion on";
+    button.setAttribute("aria-pressed", String(still));
+  }
+
+  renderFullscreen(active: boolean): void {
+    this.fullscreenButton.setAttribute("aria-label", active ? "leave fullscreen" : "enter fullscreen");
+    this.fullscreenButton.setAttribute("aria-pressed", String(active));
+  }
+
   renderSignalLevel(level: number, active: boolean): void {
-    const signalLevel = active && Number.isFinite(level)
-      ? Math.min(1, Math.max(0, level))
-      : 0;
-    this.sourceMeterFill.style.transform = `scaleX(${signalLevel.toFixed(3)})`;
+    const bounded = active && Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
+    const quantized = Math.round(bounded * 20) / 20;
+    if (quantized === this.lastSignalLevel) return;
+    this.lastSignalLevel = quantized;
+    this.meter.style.setProperty("--level", String(quantized));
+    this.meter.dataset.active = String(active);
+  }
+
+  renderMusic(music: MusicFrame, active: boolean): void {
+    this.renderSignalLevel(music.intensity, active);
+  }
+
+  renderProgress(currentTime: number, duration: number): void {
+    const available = Number.isFinite(duration) && duration > 0;
+    this.progressRow.hidden = !available;
+    if (!available) {
+      this.lastProgressSecond = -1;
+      return;
+    }
+    const second = Math.floor(Math.max(0, currentTime));
+    if (second === this.lastProgressSecond && duration === this.progressDuration) return;
+    this.lastProgressSecond = second;
+    this.progressDuration = duration;
+    this.progress.value = String(Math.round(Math.min(1, currentTime / duration) * 1000));
+    this.progressTime.textContent = this.formatTime(currentTime);
+    this.progressEnd.textContent = this.formatTime(duration);
+    this.progress.setAttribute("aria-valuetext", `${this.formatTime(currentTime)} of ${this.formatTime(duration)}`);
   }
 
   dispose(): void {
-    this.captureButton.removeEventListener("click", this.onCaptureAction);
-    this.reactivityDemoButton.removeEventListener("click", this.onReactivityDemoAction);
-    this.licensedDemoAudioButton.removeEventListener("click", this.onLicensedDemoAudioAction);
-    this.spotifyButton.removeEventListener("click", this.onSpotifyAction);
-    this.sourceDock.remove();
+    this.events.abort();
+    this.about.close();
+    this.shell.remove();
+    document.body.classList.remove("is-focused");
   }
 
-  private createOptionCopy(title: string): HTMLDivElement {
-    const copy = document.createElement("div");
-    copy.className = "source-option-copy";
-    const name = document.createElement("strong");
-    name.className = "source-option-name";
-    name.textContent = title;
-    copy.append(name);
-    return copy;
+  private activateSource(active: boolean): void {
+    if (!active) return;
+    this.setChooser(false, false);
   }
 
-  private createSourceNote(title: string, detail: string): HTMLDivElement {
-    const note = document.createElement("div");
-    note.className = "source-note";
-    const name = document.createElement("strong");
-    name.textContent = title;
-    const description = document.createElement("span");
-    description.textContent = detail;
-    note.append(name, description);
-    return note;
+  private renderSourceStatus(): void {
+    let name = "ambient";
+    let detail = "";
+    let status = "idle";
+    if (this.localStatus === "active") {
+      name = this.localLabel;
+      status = "active";
+    } else if (this.demoActive) {
+      name = "demo";
+      status = "demo";
+    } else if (this.sampleStatus === "active") {
+      name = this.sampleConfig?.available && this.sampleConfig.title ? this.sampleConfig.title : "sample";
+      detail = this.sampleConfig?.available
+        ? [this.sampleConfig.attribution, this.sampleConfig.license, this.sampleConfig.licenseUrl].filter(Boolean).join(" · ")
+        : "";
+      status = "active";
+    } else if (this.captureStatus === "active") {
+      name = "tab audio";
+      status = "active";
+    } else if (this.localStatus === "error" || this.sampleStatus === "error" || this.captureStatus === "error") {
+      name = "source error";
+      detail = this.localStatus === "error" ? this.localLabel : this.sampleStatus === "error" ? this.sampleLabel : this.captureLabel;
+      status = "error";
+    } else if (this.localStatus === "starting" || this.sampleStatus === "starting" || this.captureStatus === "starting") {
+      name = this.captureStatus === "starting" ? "choose tab" : "loading…";
+      detail = this.captureStatus === "starting" ? "enable share audio in the browser picker" : "";
+      status = "starting";
+    }
+    this.sourceName.textContent = name;
+    this.find(".release-action").hidden = status === "idle";
+    this.sourceName.title = name;
+    this.sourceDetail.textContent = detail;
+    this.sourceDetail.hidden = !detail;
+    this.sourceDock.dataset.status = status;
+    if (status === "error") this.setChooser(false);
+  }
+
+  private setChooser(open: boolean, restoreFocus = true): void {
+    const wasOpen = !this.chooser.hidden;
+    this.chooser.hidden = !open;
+    this.chooserButton.setAttribute("aria-expanded", String(open));
+    if (open) this.find(".local-option").focus();
+    else if (wasOpen && restoreFocus) this.chooserButton.focus();
+  }
+
+  private optionTitle(button: HTMLButtonElement, title: string): void {
+    const heading = button.querySelector("strong");
+    if (heading) heading.textContent = title;
+  }
+
+  private find<T extends HTMLElement>(selector: string): T {
+    const element = this.shell.querySelector<T>(selector);
+    if (!element) throw new Error(`Missing interface element: ${selector}`);
+    return element;
+  }
+
+  private formatTime(seconds: number): string {
+    const whole = Math.max(0, Math.floor(seconds));
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
   }
 }

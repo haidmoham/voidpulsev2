@@ -1,155 +1,70 @@
 # Faltone
 
-> The song is a space, and playback is descent through it.
+A music-reactive passage of light built with TypeScript, Three.js, and the Web Audio API. Pink and violet contours move through plum depth among colored, faceted fragments. Tempo controls descent speed. Spectrum, stereo position, and detected attacks shape the surrounding light and space.
 
-Faltone is a Three.js experiment in falling through the temporal structure of a song. Locomotion is the primary visualization channel: audio features become control signals, control signals drive fall dynamics, and fall dynamics shape the rendered world.
+This checkout was cloned from [haidmoham/voidpulsev2](https://github.com/haidmoham/voidpulsev2) into `~/Desktop/projects/faltone`. The reimagining started on the local branch `codex/faltone-reimagined`. The package name is `faltone`.
 
-The current prototype has an endless falling corridor. It starts with an original ambient procedural current, can run a deterministic Demo mode, and can analyze either a shared browser tab or an explicitly configured rights-cleared sample.
-
-```text
-music source → perceptual feature frame → fall/reactivity models → rendered experience
-```
-
-## Run locally
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Use `npm run build` for a production build.
-
-## Audio sources
-
-The default ambient procedural current is generated in the browser; it is not a recording and does not play a song. **Demo mode** is a deterministic full-response/silence comparison, also not music. The dock says which source is currently active.
-
-### Optional licensed sample
-
-The repository ships without external audio. A site owner may opt in to one sample by setting `VITE_DEMO_AUDIO_URL` in `.env.local` to a direct, rights-cleared `http(s)` audio URL. The source must permit cross-origin Web Audio analysis with CORS headers. Add the following only when they are factual and provided by the rights holder or source page:
-
-- `VITE_DEMO_AUDIO_TITLE`
-- `VITE_DEMO_AUDIO_ATTRIBUTION`
-- `VITE_DEMO_AUDIO_LICENSE`
-- `VITE_DEMO_AUDIO_LICENSE_URL`
-
-When configured, the dock identifies the sample with exactly that supplied metadata, and the browser loops it only after the listener presses **play sample**. Do not use Spotify, Apple Music, or other service previews; do not use audio you do not have permission to play and analyze.
-
-### Live browser-tab audio
-
-Faltone can analyze audio from a surface you explicitly share through the browser's native picker.
-
-1. Play audio in a separate browser tab.
-2. Select **choose tab** in Faltone.
-3. Choose the playing tab and enable **Share audio**.
-4. Use **release tab** or the browser's sharing control to stop.
-
-Tab audio is the most reliable option. Native application-window and system-audio choices vary by browser and operating system. The capture is analyzed locally with the Web Audio API; Faltone does not record, replay, spatialize, or upload it. When capture ends, the scene returns to its original ambient procedural current.
-
-The analyser currently derives intensity, transient energy, discrete onsets, estimated tempo, low/mid/high energy, stereo balance, and stereo width. These features drive the visual soundstage while the listener continues hearing Spotify normally.
-
-## First-pass audio to motion map
-
-The invariant is intentionally narrow: **the listener falls through the temporal structure of the song.** The renderer does not inspect FFT data or retain audio envelopes. It only receives a complete, derived `WorldFrame`.
-
-```text
-local tab capture, configured licensed sample, or ambient procedural current
-  -> reusable Web Audio buffers
-  -> pure MusicAnalyzer
-  -> MusicFrame
-  -> advanceFall + advanceReactivity
-  -> WorldFrame
-  -> FallWorld
-```
-
-| Musical meaning | Derived world response | Cap / perceptual reason |
-|---|---|---|
-| estimated BPM | terminal fall speed | 5–15 corridor units/s; tempo is the sole audio input to descent velocity and convergence |
-| intensity + spectrum | smoothed material and light pressure | changes the field without giving non-tempo features any authority over descent |
-| low | gravity weight | `0..0.55`; large body weight stays local to the gravity well |
-| mid | current presence | `0..0.4`; makes the existing current more readable without adding camera noise |
-| high | dust presence | `0..0.45`; bright percussion thickens material rather than flashing the scene |
-| balance + width | lateral pull | `-6..6`, then reduced before it reaches the camera; a bounded spatial correspondence, not a sway system |
-| width | soundstage scale | `1..2.2`; opens the familiar field without topology changes |
-| discrete onset | local wake and ring | `0..1`; one recovering impulse, with cooldown, rather than repeated beat effects |
-
-The aperture pulse and landmark breathing remain independent environmental motion. Their locked equations are unchanged:
-
-```ts
-1 + Math.sin(timeSeconds * 0.13 + aperture.phase) * 0.075
-Math.sin(timeSeconds * 0.18 + seed.phase) * 0.018 * weather
-```
-
-## Defaults and tuning record
-
-The analyzer retains the pre-topology Voidpulse starting values below. Release weights are converted by delta time so a `1/60`-second frame reproduces the listed historical ratio exactly.
-
-| Constant | Value | Status and perceptual reason |
-|---|---:|---|
-| display latency hint | `interactive` | retained; minimizes perceptual lag without routing audio to speakers |
-| FFT size / node smoothing | `1024` / `0.78` | retained; enough musical resolution while preserving a stable feature surface |
-| low / mid / high bands | `40–260` / `300–2,000` / `2,000–11,000 Hz` | retained in Hz, so meanings survive 44.1 and 48 kHz contexts |
-| low / mid / high release | `0.88` / `0.82` / `0.78` at 60 Hz | retained; low hangs longest, high clears soonest |
-| onset envelope / threshold | `0.88`, `1.25×`, `0.11` | retained; separates a real low transient from sustained bass |
-| onset recovery / cooldown | `0.82` at 60 Hz / `0.24 s` | tuned for a visible but single recoverable impulse |
-| BPM interval range/history | `60–200 BPM` / `8` intervals | tuned; rejects implausible gaps while smoothing imperfect onset timing |
-| intensity floor / gain / attack / release | `0.012` / `5` / `0.045 s` / `0.25 s` | retained; quiet material stays nearly weightless and rises without frame jitter |
-| stereo smoothing | `0.12 s` | tuned; pans correspond without inducing nausea |
-| fall tempo range / fallback | `60–180 BPM` / `72 BPM` | tuned; gives an audible-but-calm default descent while preserving a practical tempo span |
-| terminal speed range | `5–15 units/s` | tuned for the fixed 180-unit corridor to feel continuous rather than hurried |
-| fall velocity response | `4.2 s⁻¹` | establishes the BPM-owned descent in the first second without making other features velocity inputs |
-| soundstage / dust / current / gravity caps | `1.2` / `0.45` / `0.4` / `0.55` | capped and low-pass filtered before they reach the world |
-| balance pull | `3.5 + width * 2.5` | capped at `±6`, then reduced before it reaches the camera |
-| wake impulse / recovery / ring cap | `1` / `4.8 s⁻¹` / `1` | localized wake geometry may land promptly while full-field pressure stays low-pass filtered |
-
-## Verification and QA boundary
-
-Run the automated checks with:
+Open the URL printed by Vite. No account or audio configuration is required.
 
 ```bash
 npm test
 npm run lint
 npm run build
+npm run preview
 ```
 
-The suite contains deterministic analyzer coverage for both 44.1 and 48 kHz bands, historical releases, onset/recovery/BPM, stereo and mono behavior, and router reset isolation; it also covers fixed-sequence model determinism, zero-music baseline, 180-unit wrapping with cumulative distance, and semantic output caps.
+The final command serves the production build. Building locally does not deploy it.
 
-### Real-track QA, 2026-09-02
+## Listen
 
-The acceptance pass split the two browser responsibilities deliberately. The production bind control reached the native capture-permission boundary in the VS Code integrated preview; canceling it shared no source and returned the dock to its explicit `capture needs attention` state. A temporary, unlinked local QA page then fed open-licensed audio through the production `MusicAnalyzer -> FaltoneController -> FallWorld` path so the visual response could be inspected without granting access to an unknown screen or personal audio source. The page and audio were not shipped.
+Open an audio file with the file button, press `o`, or drop a file onto the page. Faltone plays it through the browser and analyzes it locally. The track bar supports seeking. Ending or releasing the file returns the scene to its ambient state. Supported codecs depend on the browser.
 
-- [Moonlight Sonata](https://commons.wikimedia.org/wiki/File:Moonlight_Sonata.ogg) provided quiet, narrow material: no tempo lock, the calm `72 BPM` fallback held descent at `6.00 units/s`, and width stayed within `0.000..0.085`.
-- [Chill Beat](https://commons.wikimedia.org/wiki/File:Chill_Beat.ogg) covered bass/mids and a wider mix: tempo settled at `69 BPM`, descent at `5.77 units/s`, balance at `-0.303..0.167`, and width at `0.000..0.490`; gravity/current motion stayed legible without turning the camera noisy.
-- [Techno@120BPM](https://commons.wikimedia.org/wiki/File:Techno@120BPM.ogg) verified tempo ownership directly: the estimator held `116..119 BPM` and descent converged to `9.89 units/s`, clearly faster than the `60 BPM` channel test at `5.00 units/s`.
-- [Military drumbeat](https://commons.wikimedia.org/wiki/File:Militarydrumbeat.ogg) covered bright percussion and strong transitions: a 30-second pass produced at least seven discrete onsets, each using the single bounded wake and recovery while the fine atmosphere remained free of flashes.
-- [Left and right test](https://commons.wikimedia.org/wiki/File:Left_and_right_test.ogg) covered hard pans: smoothed balance traversed the complete `-1.000..1.000` range and width remained bounded at `0.000..0.500`, producing correspondence without a camera cut or topology change.
+For audio from another tab, open the source chooser and select **tab audio**. Choose the playing tab in the browser picker. Enable **Share audio**. Faltone analyzes the selected stream without recording, uploading, or replaying it. Pause in Faltone does not pause the external player.
 
-The retained/tuned constants in the table above were kept after this pass. The observed tempo/speed separation, bounded stereo motion, single-wake onset behavior, and quiet fallback support their stated perceptual reasons; no additional knob tuning was warranted before landing reactivity itself.
+The initial **ambient** source and **visual demo** produce control signals. They do not produce sound. The visual demo alternates a deterministic response with silence for comparison.
 
-## Issue #1 jellyfish audit evidence
+| Key | Action |
+| --- | --- |
+| `space` | Pause or resume the scene and audio played by Faltone |
+| `o` | Open an audio file |
+| `h` | Toggle focus mode |
+| `f` | Toggle fullscreen |
+| `m` | Toggle spatial motion |
+| `Escape` | Leave focus mode or close an open panel |
 
-The jellyfish remains a separate artwork in `haidmoham/voidpulse-jellyfish`, not a Faltone implementation. The recorded audit against fresh remote `main` at `5cd450f` found a clean standalone identity; `npm install` and `npm run build` passed, and both development and production HTTP probes returned `200`. No in-app-browser visual session was available for that audit. Deployment ownership is still unresolved: that repository has no Vercel configuration or deployment documentation, while `voidpulse.shin86.dev` and `voidpulse.mhaider.dev` currently serve Faltone. This is audit evidence, not a claim that either domain is owned by the jellyfish project.
+Still mode freezes spatial movement while audio and light response continue. The operating system's reduced-motion preference selects still mode at startup.
 
-## Spotify OAuth
+## Architecture and TypeScript
 
-Faltone uses Spotify Authorization Code with PKCE. It requires a client ID but no client secret.
+```text
+audio source → MusicAnalyzer → MusicFrame
+            → fall and reactivity models → WorldFrame → FallWorld → GLSL
+```
 
-1. Create or reuse an app in the Spotify developer dashboard.
-2. Add `http://127.0.0.1:5173/callback` as a redirect URI for local development.
-3. Copy `.env.example` to `.env.local` and set `VITE_SPOTIFY_CLIENT_ID`.
-4. Add the production `${origin}/callback` URI before deploying.
+- `src/audio` owns source selection, playback, capture, and feature analysis. Local files use browser object URLs. Releasing a file revokes its URL, disconnects audio nodes, and closes its audio context.
+- `src/core` owns pure fall and reactivity calculations. `src/runtime` owns frame timing and passes complete frames to the renderer.
+- `src/world` owns Three.js geometry, materials, and shader uniforms. Contour strips and sparse particles supply depth cues. Detected attacks leave local traces in the passage.
+- `src/presentation` owns DOM controls. `src/main.ts` connects controls, sources, and the controller. `src/spotify` retains optional account authorization.
 
-The initial scope is `user-read-playback-state`, matching v1's listening-along pattern. Tokens remain in browser storage. The OAuth layer does not yet poll playback or drive fall intensity.
+`MusicFrame`, `WorldFrame`, and interfaces describe values during TypeScript checking. TypeScript removes these declarations and `import type` statements from the JavaScript output. They do not validate runtime data.
 
-## Structure
+Classes such as `LocalAudioSignal` and `FallWorld` become JavaScript that runs in the browser. Their methods call browser APIs such as `AudioContext` and Three.js APIs such as `ShaderMaterial`. The GLSL strings in `descentShaders.ts` are compiled for the GPU by WebGL. TypeScript checks the surrounding JavaScript interfaces, not GLSL syntax or the rendered result.
 
-- `src/audio`: capture, ambient-current/Demo-mode, optional licensed-sample adapters, and active-source routing.
-- `src/core`: pure fall, loop, and reactivity models plus renderer-independent frame types.
-- `src/runtime`: frame timing and state ownership.
-- `src/presentation`: DOM controls and source status.
-- `src/spotify`: handles PKCE authorization, callback validation, refresh, and disconnect.
-- `src/world`: Three.js resources and the visual mapping from complete world frames.
-- `src/main.ts`: composition and lifecycle wiring only.
+## Optional configuration
 
-## Next experiment
+A site owner can set `VITE_DEMO_AUDIO_URL` in `.env.local` to a direct, licensed `http(s)` audio URL. The server must allow cross-origin Web Audio analysis. The sample option appears only when configured. It loops after an explicit playback action. Optional metadata fields are `VITE_DEMO_AUDIO_TITLE`, `VITE_DEMO_AUDIO_ATTRIBUTION`, `VITE_DEMO_AUDIO_LICENSE`, and `VITE_DEMO_AUDIO_LICENSE_URL`. Supply only factual metadata.
 
-Tune perceptual mappings against real tracks: lateral balance as camera pull, stereo width as field expansion, spectral bands as material/depth cues, and transients as wakes. Preserve the scene's slow pulse and breathing motion as its independent living baseline.
+Spotify authorization is optional. Set `VITE_SPOTIFY_CLIENT_ID` and configure the matching `/callback` redirect URI in the Spotify application. The existing PKCE implementation uses no client secret. It stores tokens in browser storage. Account authorization does not supply audio, poll playback, or drive the scene.
+
+## Design and evidence
+
+Read [the reimagining record](docs/reimagining.md) for design adaptations and verification limits. Read [falling through music](docs/falling-through-music.md) for public references and proposed perceptual comparisons.
+
+The earlier renderer, its mapping tables, and its QA notes remain in Git history. Those observations do not verify this renderer. Automated checks cover program behavior; browser playback, visual quality, and the sense of falling require separate observation.
