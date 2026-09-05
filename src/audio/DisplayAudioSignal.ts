@@ -102,11 +102,12 @@ export class DisplayAudioSignal implements MusicSignal {
       throw new Error(this.label);
     }
 
+    let context: AudioContext | null = null;
     try {
       // The video constraint exists only to open the browser's display picker.
       const displaySurface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
       stream.getVideoTracks().forEach((track) => track.stop());
-      const context = new AudioContext({ latencyHint: DISPLAY_ANALYZER_DEFAULTS.latencyHint });
+      context = new AudioContext({ latencyHint: DISPLAY_ANALYZER_DEFAULTS.latencyHint });
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
       const splitter = context.createChannelSplitter(2);
@@ -139,10 +140,16 @@ export class DisplayAudioSignal implements MusicSignal {
         if (this.stream === stream) this.stop();
       }));
       if (context.state === "suspended") await context.resume();
+      if (requestId !== this.requestId) {
+        this.releaseCapture(stream, context);
+        return;
+      }
       const surface = displaySurface === "browser" ? "tab" : displaySurface ?? "source";
       this.setState("active", `Listening to shared ${surface} audio. Local analysis only; nothing is replayed or uploaded.`);
     } catch (error) {
-      stream.getTracks().forEach((track) => track.stop());
+      // A newer capture may own the instance while this resume promise settles.
+      this.releaseCapture(stream, context);
+      if (requestId !== this.requestId) return;
       this.release();
       this.setState("error", "Could not analyze the shared audio.");
       throw new Error(this.label, { cause: error });
@@ -191,7 +198,7 @@ export class DisplayAudioSignal implements MusicSignal {
     const wasCapturing = this.stream !== null || this.context !== null;
     this.requestId += 1;
     this.release();
-    if (wasCapturing || this.status === "starting") {
+    if (wasCapturing || this.status === "starting" || this.status === "error") {
       this.setState("stopped", "Display-audio capture stopped.");
     }
   }
@@ -227,6 +234,10 @@ export class DisplayAudioSignal implements MusicSignal {
     splitter?.disconnect();
     leftAnalyser?.disconnect();
     rightAnalyser?.disconnect();
+    this.releaseCapture(stream, context);
+  }
+
+  private releaseCapture(stream: MediaStream | null, context: AudioContext | null): void {
     stream?.getTracks().forEach((track) => track.stop());
     if (context && context.state !== "closed") {
       void context.close().catch(() => undefined);

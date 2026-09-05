@@ -61,8 +61,8 @@ export class FaltoneController {
   stop(): void {
     if (this.frameHandle !== null) this.scheduler.cancel(this.frameHandle);
     this.frameHandle = null;
+    // Resume from the same world state without counting time spent paused.
     this.previousWallTime = null;
-    this.simulationTime = 0;
   }
 
   resize(): void {

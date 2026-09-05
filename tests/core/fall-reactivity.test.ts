@@ -116,6 +116,23 @@ describe("simulation time", () => {
 });
 
 describe("reactivity policy", () => {
+  it("keeps palette drift continuous when descent wraps into another corridor", () => {
+    const before = advanceReactivity(
+      INITIAL_REACTIVITY_STATE,
+      { distance: FALL_LOOP_DEPTH - 0.001, velocity: 6, intensity: 0 },
+      SILENT, 30, 1 / 60,
+    ).reactivity;
+    const after = advanceReactivity(
+      INITIAL_REACTIVITY_STATE,
+      { distance: FALL_LOOP_DEPTH + 0.001, velocity: 6, intensity: 0 },
+      SILENT, 30 + 1 / 60, 1 / 60,
+    ).reactivity;
+
+    expect(before.cameraDepth).toBeGreaterThan(179);
+    expect(after.cameraDepth).toBeLessThan(1);
+    expect(Math.abs(after.paletteDrift - before.paletteDrift)).toBeLessThan(0.001);
+  });
+
   it("preserves the quiet baseline while retaining independent world life", () => {
     const fall: FallState = { distance: 32, velocity: 6, intensity: 0 };
     const step = advanceReactivity(INITIAL_REACTIVITY_STATE, fall, SILENT, 12, 1 / 60);

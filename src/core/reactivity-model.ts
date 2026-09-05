@@ -37,7 +37,9 @@ export function advanceReactivity(
   const time = finiteOr(timeSeconds, 0);
   const weather = 0.5 + 0.5 * Math.sin(depthPhase - time * 0.035);
   const breath = 0.5 + 0.5 * Math.sin(time * 0.16);
-  const paletteDrift = 0.5 + 0.5 * Math.sin(time * 0.025 + depthPhase * 0.35);
+  // Palette cycles span multiple corridors, so their phase must not wrap here.
+  const paletteDepthPhase = finiteOr(fallState.distance, 0) / FALL_LOOP_DEPTH * Math.PI * 2;
+  const paletteDrift = 0.5 + 0.5 * Math.sin(time * 0.025 + paletteDepthPhase * 0.35);
   const low = clampFinite(music.low, 0, 1);
   const mid = clampFinite(music.mid, 0, 1);
   const high = clampFinite(music.high, 0, 1);
